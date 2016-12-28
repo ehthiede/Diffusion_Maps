@@ -226,13 +226,14 @@ def _dense_vbwdmap(data,epsilon,U,weights=None,D=1.0,period=None,alpha=0.5,beta=
     return L, Khat, rho, q_eps_alpha, q_eps
     
 
-def scaled_diffusion_map(data,epsilon,weights=None,D=1.0,alpha=None,beta=None,period=None,nneighb=64):
+def scaled_diffusion_map(data,epsilon,weights=None,D=1.0,alpha=None,beta=None,d=None,period=None,nneighb=64,return_q=False):
     """
     Code implementing the Variable Bandwidth Diffusion Map algorithm by Berry and Harlim (see section 3). 
     """
     if len(np.shape(data)) == 1:
         data = np.transpose([data])
-    d = len(data[0]) # Number of dimensions
+    if d is None:
+        d = len(data[0]) # Number of dimensions
     N = len(data) # Number of datapoints
     if alpha is None:
         alpha = -1.*d/4.
@@ -245,14 +246,10 @@ def scaled_diffusion_map(data,epsilon,weights=None,D=1.0,alpha=None,beta=None,pe
         if not hasattr(period,'__getitem__'): # Check if period is scalar
             period = [period]
     else:
-        period = [None]*d
+        period = [None]*len(data[0])
 
     data = np.array([dat for dat in data]) # Clean the data.
-    from time import time
-    starttime = time()
     nn_indices, nn_distsq = get_nns(data,period,nneighb)
-    lasttime = time() 
-    print 'after distances', lasttime - starttime
     ##### Calculate initial estimate of the probability density
     #### DEBUG ####
 #    print '--------------'
@@ -272,11 +269,6 @@ def scaled_diffusion_map(data,epsilon,weights=None,D=1.0,alpha=None,beta=None,pe
     # Delete unused datastructures
     del q0
     del rho0
-    ctime = time()
-    print 'calculated bandwith', ctime-starttime, ctime-lasttime
-    lasttime=ctime
-    rho = (np.exp(-0.5*data*data)**beta).flatten()
-    rho /= np.average(rho)
 #    print np.min(rho), np.max(rho)
 #    print 'rho shape', np.shape(rho)
 
@@ -286,9 +278,6 @@ def scaled_diffusion_map(data,epsilon,weights=None,D=1.0,alpha=None,beta=None,pe
     for i, row in enumerate(K):
         row /= 4.*epsilon*D*rho[i]*rho[nn_indices[i]]
     K = np.exp(-K) # Value of the Kernel fxn for Dmaps
-    ctime = time()
-    print 'calculated kernel values', ctime-starttime, ctime-lasttime
-    lasttime=ctime
     # We first convert to sparse matrix format.
     rows = np.outer(np.arange(N),np.ones(nneighb))
     Kmat_coo = sps.coo_matrix((K.flatten(),(rows.flatten(),nn_indices.flatten())),shape=(N,N))
@@ -297,11 +286,11 @@ def scaled_diffusion_map(data,epsilon,weights=None,D=1.0,alpha=None,beta=None,pe
     dKmat = (Kmat -Kmat.transpose())
     dKmat = dKmat.multiply(dKmat.sign())
     Kmat = (Kmat +  Kmat.transpose())/2. + dKmat/2.
-    ctime = time()
-    print 'calculated sparse kernel mat', ctime-starttime, ctime-lasttime
-    lasttime=ctime
  
     q = np.array(Kmat.sum(axis=1)).flatten()
+    # LINE IN FOR TESTING START
+    q /= (rho**d)
+    # LINE IN FOR TESTING STOP
     diagq = sps.dia_matrix((1./(q**alpha),[0]),shape=(N,N))
     Kmat = diagq * Kmat * diagq
     q_alpha = np.array(Kmat.sum(axis=1)).flatten()
@@ -310,11 +299,10 @@ def scaled_diffusion_map(data,epsilon,weights=None,D=1.0,alpha=None,beta=None,pe
     L = L - sps.eye(N)
     diag_norm = sps.dia_matrix((1./(rho**2*epsilon),0),shape=(N,N))
     L = diag_norm * L
-    ctime = time()
-    print 'finished linalg', ctime-starttime, ctime-lasttime
-    lasttime=ctime
-
-    return L, Kmat, rho, q_alpha
+    if return_q:
+        return L, Kmat, rho, q_alpha, q
+    else:
+        return L, Kmat, rho, q_alpha
 
 def get_nns(data,period=None,nneighb=64):
     """
