@@ -149,84 +149,8 @@ def sparse_diff_map(data,epsilon,weights=None,alpha=0.5,D=1.0,period=None,kfxn='
     ks = P_dg.dot(ks)
     return ks,pi
 
-def _dense_vbwdmap(data,epsilon,U,weights=None,D=1.0,period=None,alpha=0.5,beta=0.0):
-    if len(np.shape(data)) == 1:
-        data = np.transpose([data])
-    d = len(data[0]) # Number of dimensions
-    N = len(data) # Number of datapoints
-#    beta = -0.5
-#    alpha = -1.*d/4.
-#    beta = 0.0
-#    alpha = 1./2.
-#    beta = -1./3
-#    alpha = 0.0
 
-    if period is not None: # Periodicity provided.
-        if not hasattr(period,'__getitem__'): # Check if period is scalar
-            period = [period]
-    else:
-        period = [None]*d
-
-    data = np.array([dat for dat in data]) # Clean the data.
-    distsq = np.zeros((N,N))
-    for x in xrange(d):
-        trajt = np.transpose(np.array([data[:,x]]))
-        dist_x = cdist(trajt,trajt)
-        p = period[x]
-        if p is not None:
-            print p, 'periodic'
-            dist_x -= p*np.rint(dist_x/p)
-        distsq += dist_x**2
-#    rho = []
-#    for i in xrange(N):
-#        dxi = distsq[i]
-#        dx = dxi[dxi.argsort()[1:20]]
-#        rho.append(np.sqrt(np.sum(dx**2)/len(dx)))
-#        print i, dxi[dxi.argsort()[1:8]], rho[-1]
-#    rho = np.array(rho)*100
-#    epsilon = 1.
-#    print rho
-    rho = np.exp(-U)**beta
-#    rho /= np.sum(rho)
-#    rho /= np.min(rho)
-    print np.min(rho), np.max(rho)
-#    raise Exception
-    
-
-    distsq /= np.transpose([rho])
-    distsq /= rho
-    distsq = -distsq/(4.*epsilon)
-#    print np.max(np.abs(distsq - np.transpose(distsq)))
-    K = np.exp(distsq)
-#    for i in xrange(N):
-#        print i,K[i][K[i].argsort()[0:5:-1]]
-#    import matplotlib.pyplot as plt
-#    plt.pcolor(K,cmap='viridis')
-#    plt.colorbar()
-#    plt.show()
-#    raise Exception
-#    q_eps = np.sum(K,axis=1)/(rho**d)
-    q_eps = np.exp(-U)
-    K /= q_eps**alpha
-    K /= np.transpose([q_eps**alpha])
-    q_eps_alpha = np.sum(K,axis=1)
-    Khat = K /np.transpose([q_eps_alpha])
-#    plt.pcolor(Khat,cmap='viridis')
-#    plt.colorbar()
-#    plt.show()
-#    print np.amax(Khat,axis=1)
-#    raise Exception
-#    print (K[0,0]/K[0,1])/(Khat[0,0]/Khat[0,1]), 'divide check'
-    L = (Khat - np.eye(len(Khat)))/epsilon
-    rho2 = rho**2
-    rho2 /= np.average(rho2)
-    L /= np.transpose([rho2])
-#    L /= np.transpose([rho])
-#    L /= rho
-    return L, Khat, rho, q_eps_alpha, q_eps
-    
-
-def scaled_diffusion_map(data,epsilon,weights=None,D=1.0,alpha=None,beta=None,d=None,period=None,nneighb=64,return_q=False):
+def scaled_diffusion_map(data,epsilon,density=None,weights=None,D=1.0,alpha=None,beta=None,d=None,period=None,nneighb=64,return_q=False):
     """
     Code implementing the Variable Bandwidth Diffusion Map algorithm by Berry and Harlim (see section 3). 
     """
@@ -235,6 +159,9 @@ def scaled_diffusion_map(data,epsilon,weights=None,D=1.0,alpha=None,beta=None,d=
     if d is None:
         d = len(data[0]) # Number of dimensions
     N = len(data) # Number of datapoints
+    if density is not None:
+        if len(density) != N:
+            raise Exception
     if alpha is None:
         alpha = -1.*d/4.
 #        alpha = 1./2.
@@ -250,27 +177,22 @@ def scaled_diffusion_map(data,epsilon,weights=None,D=1.0,alpha=None,beta=None,d=
 
     data = np.array([dat for dat in data]) # Clean the data.
     nn_indices, nn_distsq = get_nns(data,period,nneighb)
-    ##### Calculate initial estimate of the probability density
-    #### DEBUG ####
-#    print '--------------'
-#    print np.shape(nn_distsq)
-#    print np.shape(nn_distsq[:,:8])
-#    print nn_distsq[0,:8]
-#    print '--------------'
-    rho0= np.sqrt(np.sum(nn_distsq[:,:8],axis=1)/(8-1)) # Initial bandwidth for KDE
-    q0 = np.copy(nn_distsq)
-    for i, row in enumerate(q0):
-        row /= 2.*rho0[i]*rho0[nn_indices[i]]
-    q0 = np.sum(np.exp(-q0),axis=1)
-    q0 /= (rho0**d) 
-    q0 *= (2.*np.pi)**(-d/2.) /len(q0)
-    rho = q0**beta # Bandwidth for the Diffusion Map.
-#    print 'rho shape', np.shape(rho)
-    # Delete unused datastructures
-    del q0
-    del rho0
-#    print np.min(rho), np.max(rho)
-#    print 'rho shape', np.shape(rho)
+
+    ##### If no density provided, calculate initial estimate of the probability density
+    if density is None:
+        rho0= np.sqrt(np.sum(nn_distsq[:,:8],axis=1)/(8-1)) # Initial bandwidth for KDE
+        q0 = np.copy(nn_distsq)
+        for i, row in enumerate(q0):
+            row /= 2.*rho0[i]*rho0[nn_indices[i]]
+        q0 = np.sum(np.exp(-q0),axis=1)
+        q0 /= (rho0**d) 
+        q0 *= (2.*np.pi)**(-d/2.) /len(q0)
+        rho = q0**beta # Bandwidth for the Diffusion Map.
+        # Delete unused datastructures
+        del q0
+        del rho0
+    else:
+        rho = density**beta
 
     ##### Calculate the new Kernel.
     # Create the Sparse Kernel Matrix
@@ -286,11 +208,12 @@ def scaled_diffusion_map(data,epsilon,weights=None,D=1.0,alpha=None,beta=None,d=
     dKmat = (Kmat -Kmat.transpose())
     dKmat = dKmat.multiply(dKmat.sign())
     Kmat = (Kmat +  Kmat.transpose())/2. + dKmat/2.
- 
-    q = np.array(Kmat.sum(axis=1)).flatten()
-    # LINE IN FOR TESTING START
-    q /= (rho**d)
-    # LINE IN FOR TESTING STOP
+    
+    if density is None:
+        q = np.array(Kmat.sum(axis=1)).flatten()
+        q /= (rho**d)
+    else:
+        q = density
     diagq = sps.dia_matrix((1./(q**alpha),[0]),shape=(N,N))
     Kmat = diagq * Kmat * diagq
     q_alpha = np.array(Kmat.sum(axis=1)).flatten()
