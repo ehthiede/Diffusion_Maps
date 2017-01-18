@@ -8,6 +8,7 @@ import numpy as np
 from scipy.spatial.distance import cdist
 import scipy.sparse as sps
 import itertools
+import gc
 
 def diffusion_map(data,epsilon,alpha=0.5,weights=None,D=1.0,period=None):
     """
@@ -64,15 +65,24 @@ def diffusion_map(data,epsilon,alpha=0.5,weights=None,D=1.0,period=None):
     # Implement automatic epsilons?
     distsq = -distsq/(4.*D*epsilon)
     ks = np.exp(distsq)
-    q_eps_i = np.sum(ks*weights,axis=1)
+#    q_eps_i = np.sum(ks*weights,axis=1)
+#    q_sqrt = q_eps_i**alpha
+#    ks *=weights/q_sqrt
+#    ks /= np.transpose([q_sqrt])
+    q_eps_i = np.sum(ks,axis=1)
     q_sqrt = q_eps_i**alpha
-    ks *=weights/q_sqrt
-    ks /= np.transpose([q_sqrt])
+    print np.shape(q_sqrt),'qsqrtshape'
+    weights_sqrt = (weights**(1.-alpha))/q_sqrt
+    ks *= weights_sqrt
+#    ks *= np.transpose([1./(q_sqrt*weights**alpha)])
+    print ks[0,1]-ks[1,0], 'symmetry check'
+    print ks[0,1], ks[1,0], 'symmetry check'
     d = np.sum(ks,axis=1,keepdims=True)
     P = ks/d
     d = d.flatten()
     d /= np.sum(d)
-    return (P-np.eye(len(P)))/epsilon,d
+#    return (P-np.eye(len(P)))/epsilon,d
+    return P,d
 
 def kernel(distsq,epsilon,D,kfxn='quartic'):
     distsq  = np.array(distsq)
@@ -149,11 +159,12 @@ def sparse_diff_map(data,epsilon,weights=None,alpha=0.5,D=1.0,period=None,kfxn='
     ks = P_dg.dot(ks)
     return ks,pi
 
-
+@profile
 def scaled_diffusion_map(data,epsilon,density=None,weights=None,D=1.0,alpha=None,beta=None,d=None,period=None,nneighb=64,return_q=False):
     """
     Code implementing the Variable Bandwidth Diffusion Map algorithm by Berry and Harlim (see section 3). 
     """
+
     if len(np.shape(data)) == 1:
         data = np.transpose([data])
     if d is None:
@@ -180,6 +191,7 @@ def scaled_diffusion_map(data,epsilon,density=None,weights=None,D=1.0,alpha=None
 
     ##### If no density provided, calculate initial estimate of the probability density
     if density is None:
+#    if True:
         rho0= np.sqrt(np.sum(nn_distsq[:,:8],axis=1)/(8-1)) # Initial bandwidth for KDE
         q0 = np.copy(nn_distsq)
         for i, row in enumerate(q0):
@@ -193,6 +205,8 @@ def scaled_diffusion_map(data,epsilon,density=None,weights=None,D=1.0,alpha=None
         del rho0
     else:
         rho = density**beta
+    # Normalize values to make epsilon choices commensurate....
+    rho /= np.median(rho)
 
     ##### Calculate the new Kernel.
     # Create the Sparse Kernel Matrix
@@ -202,12 +216,21 @@ def scaled_diffusion_map(data,epsilon,density=None,weights=None,D=1.0,alpha=None
     K = np.exp(-K) # Value of the Kernel fxn for Dmaps
     # We first convert to sparse matrix format.
     rows = np.outer(np.arange(N),np.ones(nneighb))
-    Kmat_coo = sps.coo_matrix((K.flatten(),(rows.flatten(),nn_indices.flatten())),shape=(N,N))
-    Kmat = Kmat_coo.tocsr() # Convert to 
+#    Kmat_coo = sps.coo_matrix((K.flatten(),(rows.flatten(),nn_indices.flatten())),shape=(N,N))
+#    del nn_distsq
+#    del nn_indices
+#    Kmat = Kmat_coo.tocsr() # Convert to 
+#    del Kmat_coo
+    Kmat = sps.csr_matrix((K.flatten(),(rows.flatten(),nn_indices.flatten())),shape=(N,N))
+    gc.collect()
     # We symmetrize K.
-    dKmat = (Kmat -Kmat.transpose())
+    Ktrans = Kmat.transpose()
+    dKmat = (Kmat -Ktrans)
     dKmat = dKmat.multiply(dKmat.sign())
-    Kmat = (Kmat +  Kmat.transpose())/2. + dKmat/2.
+    dKmat /= 2.
+    Kmat = Kmat + Ktrans
+    Kmat /= 2.
+    Kmat = Kmat + dKmat
     
     if density is None:
         q = np.array(Kmat.sum(axis=1)).flatten()
@@ -215,11 +238,17 @@ def scaled_diffusion_map(data,epsilon,density=None,weights=None,D=1.0,alpha=None
     else:
         q = density
     diagq = sps.dia_matrix((1./(q**alpha),[0]),shape=(N,N))
-    Kmat = diagq * Kmat * diagq
+#    Kmat = diagq * Kmat * diagq
+    Kmat = diagq * Kmat 
+    Kmat = Kmat * diagq
+    del diagq
     q_alpha = np.array(Kmat.sum(axis=1)).flatten()
     diagq_alpha = sps.dia_matrix((1./(q_alpha),[0]),shape=(N,N))
     L = diagq_alpha * Kmat # Normalize each of the rows of the matrix
-    L = L - sps.eye(N)
+#    imat = sps.dia_matrix((1.,[0]),shape=(N,N))
+#    L = L - imat
+    diag = L.diagonal()-1.
+    L.setdiag(diag)
     diag_norm = sps.dia_matrix((1./(rho**2*epsilon),0),shape=(N,N))
     L = diag_norm * L
     if return_q:
