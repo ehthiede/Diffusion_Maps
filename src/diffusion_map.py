@@ -7,6 +7,7 @@ Created on Mon Jun  6 11:07:50 2016
 import numpy as np
 from scipy.spatial.distance import cdist
 import scipy.sparse as sps
+import scipy.linalg as spl
 import itertools
 import gc
 
@@ -159,7 +160,7 @@ def sparse_diff_map(data,epsilon,weights=None,alpha=0.5,D=1.0,period=None,kfxn='
     ks = P_dg.dot(ks)
     return ks,pi
 
-def scaled_diffusion_map(data,epsilon,density=None,weights=None,D=1.0,alpha=None,beta=None,d=None,period=None,nneighb=64,return_q=False):
+def scaled_diffusion_map(data,epsilon,density=None,weights=None,D=1.0,alpha=None,beta=None,d=None,period=None,nneighb=100,return_q=False):
     """
     Code implementing the Variable Bandwidth Diffusion Map algorithm by Berry and Harlim (see section 3). 
     """
@@ -208,18 +209,19 @@ def scaled_diffusion_map(data,epsilon,density=None,weights=None,D=1.0,alpha=None
     rho /= np.median(rho)
 
     ##### Calculate the new Kernel.
+    try:
+        Dinv = spl.inv(D)
+    except:
+        Dinv = 1./D
+    print 'Dinv is ', Dinv
+    nn_indices, nn_distsq = get_nns(data,period,nneighb,Dinv=Dinv)
     # Create the Sparse Kernel Matrix
     K = np.copy(nn_distsq)
     for i, row in enumerate(K):
-        row /= 4.*epsilon*D*rho[i]*rho[nn_indices[i]]
+        row /= 4.*epsilon*rho[i]*rho[nn_indices[i]]
     K = np.exp(-K) # Value of the Kernel fxn for Dmaps
     # We first convert to sparse matrix format.
     rows = np.outer(np.arange(N),np.ones(nneighb))
-#    Kmat_coo = sps.coo_matrix((K.flatten(),(rows.flatten(),nn_indices.flatten())),shape=(N,N))
-#    del nn_distsq
-#    del nn_indices
-#    Kmat = Kmat_coo.tocsr() # Convert to 
-#    del Kmat_coo
     Kmat = sps.csr_matrix((K.flatten(),(rows.flatten(),nn_indices.flatten())),shape=(N,N))
     gc.collect()
     # We symmetrize K.
@@ -241,11 +243,16 @@ def scaled_diffusion_map(data,epsilon,density=None,weights=None,D=1.0,alpha=None
     Kmat = diagq * Kmat 
     Kmat = Kmat * diagq
     del diagq
+    if weights is not None:
+        print 'found weight vector'
+        diag_wt = sps.dia_matrix((weights**0.5,[0]),shape=(N,N))
+#        diag_wt = sps.dia_matrix((weights,[0]),shape=(N,N))
+        Kmat = diag_wt * Kmat
+        Kmat = Kmat * diag_wt
+        del diag_wt
     q_alpha = np.array(Kmat.sum(axis=1)).flatten()
     diagq_alpha = sps.dia_matrix((1./(q_alpha),[0]),shape=(N,N))
     L = diagq_alpha * Kmat # Normalize each of the rows of the matrix
-#    imat = sps.dia_matrix((1.,[0]),shape=(N,N))
-#    L = L - imat
     diag = L.diagonal()-1.
     L.setdiag(diag)
     diag_norm = sps.dia_matrix((1./(rho**2*epsilon),0),shape=(N,N))
@@ -255,7 +262,7 @@ def scaled_diffusion_map(data,epsilon,density=None,weights=None,D=1.0,alpha=None
     else:
         return L, Kmat, rho, q_alpha
 
-def get_nns(data,period=None,nneighb=64):
+def get_nns(data,period=None,nneighb=64,Dinv=1):
     """
     get the indices of the nneighb nearest neighbors, and calculate the distance to them
 
@@ -286,7 +293,14 @@ def get_nns(data,period=None,nneighb=64):
             p = period[dim]
             if p is not None:
                 dx[:,dim] -= p*np.rint(dx[:,dim]/p)
-        dsq_i = np.sum(dx**2,axis=1) # distance squared values for all points
+                
+        dsq_i = np.sum(dx*np.dot(dx,Dinv),axis=1)  
+#        if D is not 1:
+#            print np.shape(dx)
+#            dsq_i_check = np.sum(dx**2,axis=1) # distance squared values for all points
+#            print np.shape(dsq_i), np.max(np.abs(dsq_i-dsq_i_check))    
+#            print D
+#            raise Exception
         # Find nneighb largest elements
         ui_i = np.argpartition(dsq_i,nneighb-1)[:nneighb] #unsorted indices
         ud_i = dsq_i[ui_i] # unsorted distances
