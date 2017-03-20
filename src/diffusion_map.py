@@ -160,25 +160,70 @@ def sparse_diff_map(data,epsilon,weights=None,alpha=0.5,D=1.0,period=None,kfxn='
     ks = P_dg.dot(ks)
     return ks,pi
 
-def scaled_diffusion_map(data,epsilon,density=None,weights=None,D=1.0,alpha=None,beta=None,d=None,period=None,nneighb=100,return_q=False):
+def scaled_diffusion_map(data,epsilon,D=1.0,alpha=None,beta=None,period=None,nneighb=None,density=None,weights=None,d=None,return_full=False):
+    """Code implementing the Variable Bandwidth Diffusion Map algorithm by Berry and Harlim (see section 3).
+
+    Parameters
+    ----------
+    data : ndarray
+        Data to create the diffusion map on.  Can either be a one-dimensional time series, or a timeseries of Nxk, where N is the number of data points and k is the dimensionality of data.
+    epsilon : float
+        Diffusion map lengthscale parameter
+    D : scalar or 2D array-like, optional
+        Diffusion tensor for the system.  If scalar, this is taken to be a diagonal matrix with the scaler on the diagonal.  If array, the array must be square..  Default value is 1.0.
+    alpha : float, optional
+        Diffusion map parameter, the exponent on the inverse of the density estimate in front of the Kernel: see Berry and Harlim for more details.  Default value is 0.5
+    beta : float, optional
+        Diffusion map parameter, the exponent of the density estimate in the Bandwidth scaling the distances.  Default value is 0.0 (No Bandwidth scaling)
+    period : 1D array-like or float, optional
+        Period of the collective variable e.g. 360 for an angle. If None, all collective variables are taken to be aperiodic.  If scalar, assumed to be period of each collective variable. If 1D iterable with each value a scalar or None, each cv has periodicity of that size.
+    nneighb : int, optional
+        Approximate number of nearest neighbors to keep for each state in the kernel matrix.  This introduces a truncation error into the diffusion map.  However, due to exponential decay of the Kernel, this is generally negligible.  Default is None, i.e. to keep all neighbors.
+    density : 1d array-like, optional
+        The stationary probability density of the process, given up to a constant multiple.  If provided, this is used to estimate the bandwidth in the numerator of the diffusion map.  If not provided, the density is instead estimated through Kernel density estimation.
+    weights : 1d array-like, optional
+        The ratio between the desired probability distribution and the sampled probability distribution.  Unless you are doing importance sampling or umbrella sampling, this should probably be one for each sample point (the default).
+    d : int, optional
+        Dimensionality of the system.  Default is the number of coordinates in each datapoint.  However, for some systems (e.g. a circlular orbit in 2D), this may be higher than the true dimensionality of the system.
+    return_full : bool, optional
+        If True, returns the expanded set of matrices and vectors.  
+    
+    Returns
+    -------
+    L : scipy sparse matrix
+        Diffusion map generator.  This is in a sparse matrix representation, a dense representation can be achieved by running L.toarray().
+    pi : ndarray
+        Stationary distribution of the generator.
+    Kmat : scipy sparse matrix, if return_full==True
+        Symmetric Kernel matrix used to construct L.
+    rho : ndarray, if return_full==True
+        Bandwidth used to construct K and L.
+
     """
-    Code implementing the Variable Bandwidth Diffusion Map algorithm by Berry and Harlim (see section 3). 
-    """
+    if len(np.shape(data)) == 1: # If data is 1D, make it 2D so indices work
+        data = np.array([data])
+        data = np.transpose(data)
+    # Initialize variables
+    ndim = len(data[0]) 
+    npnts = len(data)
+    
+    if period is not None: # Periodicity provided.
+        if not hasattr(period,'__getitem__'): # Check if period is scalar
 
     if len(np.shape(data)) == 1:
         data = np.transpose([data])
     if d is None:
         d = len(data[0]) # Number of dimensions
     N = len(data) # Number of datapoints
+    if nneighb is None:
+        nneighb = N # Use full data set.
     if density is not None:
         if len(density) != N:
             raise Exception
     if alpha is None:
         alpha = -1.*d/4.
-#        alpha = 1./2.
     if beta is None:
         beta = -0.5
-#        beta = 0.0
 
     if period is not None: # Periodicity provided.
         if not hasattr(period,'__getitem__'): # Check if period is scalar
@@ -257,10 +302,11 @@ def scaled_diffusion_map(data,epsilon,density=None,weights=None,D=1.0,alpha=None
     L.setdiag(diag)
     diag_norm = sps.dia_matrix((1./(rho**2*epsilon),0),shape=(N,N))
     L = diag_norm * L
-    if return_q:
-        return L, Kmat, rho, q_alpha, q
+    pi = rho**2* q_alpha
+    if return_full:
+        return L,pi, Kmat, rho 
     else:
-        return L, Kmat, rho, q_alpha
+        return L,pi 
 
 def get_nns(data,period=None,nneighb=64,Dinv=1):
     """
@@ -295,12 +341,6 @@ def get_nns(data,period=None,nneighb=64,Dinv=1):
                 dx[:,dim] -= p*np.rint(dx[:,dim]/p)
                 
         dsq_i = np.sum(dx*np.dot(dx,Dinv),axis=1)  
-#        if D is not 1:
-#            print np.shape(dx)
-#            dsq_i_check = np.sum(dx**2,axis=1) # distance squared values for all points
-#            print np.shape(dsq_i), np.max(np.abs(dsq_i-dsq_i_check))    
-#            print D
-#            raise Exception
         # Find nneighb largest elements
         ui_i = np.argpartition(dsq_i,nneighb-1)[:nneighb] #unsorted indices
         ud_i = dsq_i[ui_i] # unsorted distances
@@ -308,10 +348,9 @@ def get_nns(data,period=None,nneighb=64,Dinv=1):
         indices[i] = ui_i[sorter]
         distsq[i] = ud_i[sorter]
     return indices, distsq
-        
 
     
-def minimage_traj(rv,period):
+def _minimage_traj(rv,period):
     """Calculates the minimum trajectory
 
     Parameters
