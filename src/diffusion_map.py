@@ -10,7 +10,8 @@ import scipy.linalg as spl
 import gc
 
 def scaled_diffusion_map(data,epsilon,D=1.0,alpha=None,beta=None,period=None,nneighb=None,density=None,weights=None,d=None,return_full=False):
-    """Code implementing the Variable Bandwidth Diffusion Map algorithm by Berry and Harlim (see section 3).
+    """
+    Code implementing the Variable Bandwidth Diffusion Map algorithm by Berry and Harlim (see section 3).
 
     Parameters
     ----------
@@ -56,8 +57,6 @@ def scaled_diffusion_map(data,epsilon,D=1.0,alpha=None,beta=None,period=None,nne
     ndim = len(data[0]) 
     npnts = len(data)
     
-    if period is not None: # Periodicity provided.
-        if not hasattr(period,'__getitem__'): # Check if period is scalar
 
     if len(np.shape(data)) == 1:
         data = np.transpose([data])

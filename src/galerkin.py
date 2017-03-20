@@ -10,7 +10,7 @@ from scipy.sparse.linalg import eigsh
 import scipy.sparse as sps
 import scipy.linalg as spl
 import linalg as LA
-from diffusion_map import diffusion_map , scaled_diffusion_map
+from diffusion_map import scaled_diffusion_map
 
 
 def get_generator(evecs,dt_eff=1.,normalize=False):
