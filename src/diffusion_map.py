@@ -83,7 +83,9 @@ def scaled_diffusion_map(data,epsilon,D=1.0,alpha=None,beta=None,period=None,nne
     nn_indices, nn_distsq = get_nns(data,period,nneighb)
 
     ##### If no density provided, calculate initial estimate of the probability density
-    if density is None:
+    if beta == 0:
+        rho = np.ones(len(data))
+    elif density is None:
 #    if True:
         rho0= np.sqrt(np.sum(nn_distsq[:,:8],axis=1)/(8-1)) # Initial bandwidth for KDE
         q0 = np.copy(nn_distsq)
@@ -151,8 +153,9 @@ def scaled_diffusion_map(data,epsilon,D=1.0,alpha=None,beta=None,period=None,nne
     diag_norm = sps.dia_matrix((1./(rho**2*epsilon),0),shape=(N,N))
     L = diag_norm * L
     pi = rho**2* q_alpha
+    pi /= np.sum(pi)
     if return_full:
-        return L,pi, Kmat, rho 
+        return L,pi, Kmat, rho, q
     else:
         return L,pi 
 
