@@ -7,9 +7,10 @@ Created on Mon Jun  6 11:07:50 2016
 import numpy as np
 import scipy.sparse as sps
 import scipy.linalg as spl
+from kde import get_nns
 import gc
 
-def scaled_diffusion_map(data,epsilon,D=1.0,alpha=None,beta=None,period=None,nneighb=None,density=None,weights=None,d=None,return_full=False):
+def diffusion_map(data,epsilon,D=1.0,alpha=None,beta=None,period=None,nneighb=None,density=None,weights=None,d=None,return_full=False):
     """
     Code implementing the Variable Bandwidth Diffusion Map algorithm by Berry and Harlim (see section 3).
 
@@ -101,19 +102,21 @@ def scaled_diffusion_map(data,epsilon,D=1.0,alpha=None,beta=None,period=None,nne
     else:
         rho = density**beta
     # Normalize values to make epsilon choices commensurate....
-    rho /= np.median(rho)
+#    rho /= np.median(rho)
 
     ##### Calculate the new Kernel.
     try:
         Dinv = spl.inv(D)
     except:
         Dinv = 1./D
-    print 'Dinv is ', Dinv
+    old_dsq = np.copy(nn_distsq)
     nn_indices, nn_distsq = get_nns(data,period,nneighb,Dinv=Dinv)
     # Create the Sparse Kernel Matrix
     K = np.copy(nn_distsq)
+    
     for i, row in enumerate(K):
-        row /= 4.*epsilon*rho[i]*rho[nn_indices[i]]
+        row /= rho[i]*rho[nn_indices[i]]
+    K /= 4.*epsilon
     K = np.exp(-K) # Value of the Kernel fxn for Dmaps
     # We first convert to sparse matrix format.
     rows = np.outer(np.arange(N),np.ones(nneighb))
@@ -121,25 +124,23 @@ def scaled_diffusion_map(data,epsilon,D=1.0,alpha=None,beta=None,period=None,nne
     gc.collect()
     # We symmetrize K.
     Ktrans = Kmat.transpose()
-    dKmat = (Kmat -Ktrans)
-    dKmat = dKmat.multiply(dKmat.sign())
-    dKmat /= 2.
+    dKmat = abs(Kmat -Ktrans)
     Kmat = Kmat + Ktrans
-    Kmat /= 2.
     Kmat = Kmat + dKmat
+    Kmat *= 0.5
+    Kmat = np.load('Kmat_GK.npy').item()
     
-    if density is None:
-        q = np.array(Kmat.sum(axis=1)).flatten()
-        q /= (rho**d)
-    else:
-        q = density
+#    if density is None:
+    q = np.array(Kmat.sum(axis=1)).flatten()
+    q /= (rho**d)
+#    else:
+#        q = density
     diagq = sps.dia_matrix((1./(q**alpha),[0]),shape=(N,N))
 #    Kmat = diagq * Kmat * diagq
     Kmat = diagq * Kmat 
     Kmat = Kmat * diagq
     del diagq
     if weights is not None:
-        print 'found weight vector'
         diag_wt = sps.dia_matrix((weights**0.5,[0]),shape=(N,N))
 #        diag_wt = sps.dia_matrix((weights,[0]),shape=(N,N))
         Kmat = diag_wt * Kmat
@@ -159,46 +160,15 @@ def scaled_diffusion_map(data,epsilon,D=1.0,alpha=None,beta=None,period=None,nne
     else:
         return L,pi 
 
-def get_nns(data,period=None,nneighb=64,Dinv=1):
-    """
-    get the indices of the nneighb nearest neighbors, and calculate the distance to them
 
-    Parameters
-    ----------
-    data : 2D array-like
-        The location of every data point in the space
-    period: array-like or scalar
-        Periodicity of the space in each dimension.
-    nneighb : int
-        Number of nearest neighbors to calculate.
+#def optimal_bw(
 
-    Returns
-    -------
-    indices : 2D array
-        indices of the nearest neighbers.  Element i,j is the j'th nearest neighbor of the i'th data point.  
-    distsq : 2D array
-        Squared distance between points in the neighborlist.
-        
+def scaled_diffusion_map(data,epsilon,D=1.0,alpha=None,beta=None,period=None,nneighb=None,density=None,weights=None,d=None,return_full=False):
     """
-    npnts = len(data)
-    indices = np.zeros((npnts,nneighb),dtype=np.int)
-    distsq = np.zeros((npnts,nneighb))
-    for i,pnt in enumerate(data):
-        dx = pnt - data
-        # Enforce periodic boundary conditions.
-        for dim in xrange(len(pnt)):
-            p = period[dim]
-            if p is not None:
-                dx[:,dim] -= p*np.rint(dx[:,dim]/p)
-                
-        dsq_i = np.sum(dx*np.dot(dx,Dinv),axis=1)  
-        # Find nneighb largest elements
-        ui_i = np.argpartition(dsq_i,nneighb-1)[:nneighb] #unsorted indices
-        ud_i = dsq_i[ui_i] # unsorted distances
-        sorter = ud_i.argsort()
-        indices[i] = ui_i[sorter]
-        distsq[i] = ud_i[sorter]
-    return indices, distsq
+    Old name for the diffusion map routine maintained for backwards compatability
+    """
+    return diffusion_map(data,epsilon,D=D,alpha=alpha,beta=beta,period=period,nneighb=nneighb,density=density,weights=weights,d=d,return_full=return_full)
+
 
     
 def _minimage_traj(rv,period):
