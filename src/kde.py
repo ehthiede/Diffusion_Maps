@@ -38,11 +38,6 @@ def kde(data,rho=None,period=None,nneighb=None,d=None,nn_rho=8,epses=2.**np.aran
     """
     # Default Parameter Selection and Type Cleaning
     N = len(data)
-    if period is not None: # Periodicity provided.
-        if not hasattr(period,'__getitem__'): # Check if period is scalar
-            period = [period]
-    else:
-        period = [None]*len(data[0])
     if nneighb is None:
         nneighb = N # If no neighbor no. provided, use full data set.
     if len(np.shape(data)) == 1: # If data is 1D structure, make it 2D 
@@ -69,12 +64,19 @@ def kde(data,rho=None,period=None,nneighb=None,d=None,nn_rho=8,epses=2.**np.aran
     scaled_distsq = np.copy(nn_distsq)
     for i, row in enumerate(scaled_distsq):
         row /= 2.*rho[i]*rho[nn_indices[i]]
-    eps_opt, d_est = get_optimal_bandwidth(scaled_distsq,epses=epses)
-    if d is None: # If dimensionality is not provided, use estimated value.
-        d = d_est
+
+    if isinstance(epses,numbers.Number):
+        epsilon = epses
+    else:
+        eps_opt, d_est = get_optimal_bandwidth(scaled_distsq,epses=epses)
+        if d is None: # If dimensionality is not provided, use estimated value.
+            d = d_est
 
     # Estimated density.
     q0 = np.sum(np.exp(-scaled_distsq/eps_opt),axis=1)
+    if np.any(rho-1.):
+        if d is None:
+            raise ValueError('Dimensionality needed to normalize the density estimate , but no dimensionality information found or estimated.'%param)
     q0 /= (rho**d) 
     q0 *= (2.*np.pi)**(-d/2.) /len(q0)
     return q0, d_est, eps_opt
@@ -82,20 +84,32 @@ def kde(data,rho=None,period=None,nneighb=None,d=None,nn_rho=8,epses=2.**np.aran
 def get_optimal_bandwidth(scaled_distsq,epses=2.**np.arange(-40,41)):
     """Calculates the optimal bandwidth for kernel density estimation, according to the algorithm of Berry and Harlim.
 
+    Parameters
+    ----------
+    scaled_distsq : 1D array-like
+        Value of the distances squared, scaled by the bandwidth function.  For instance, this could be ||x-y||^2 / (\rho(x) \rho(y)) evaluated at each pair of points.
+    epses : 1D array-like, optional
+        Possible values of the bandwidth constant.  The optimal value is selected by estimating the derivative in Giannakis, Berry, and Harlim using a forward difference.  Note: it is explicitely assumed that the the values are either monotonically increasing or decreasing.  Default is all powers of two from 2^-40 to 2^40.
     """
     # Calculate double sum.
     N = len(scaled_distsq)
     log_T = []
     log_eps = []
     for eps in epses:
+#        kernel = np.exp(-scaled_distsq/float(eps))
         kernel = np.exp(-scaled_distsq/float(eps))
-        log_T.append(np.log(np.sum(kernel)/(N**2)))
+        log_T.append(np.log(np.average(kernel)))
         log_eps.append(np.log(eps))
+
+    #### DEBUG ####
+    np.save('log_T.npy',log_T)
+    ###############
     
     # Find max of derivative of d(log(T))/d(log(epsilon)), get optimal eps, d
     log_deriv = np.diff(log_T)/np.diff(log_eps)
     max_loc = np.argmax(log_deriv)
-    eps_opt = np.exp((log_eps[max_loc]+log_eps[max_loc+1])/2.)
+    print np.exp(log_eps[max_loc]), np.exp(log_eps[max_loc+1])
+    eps_opt = np.max([np.exp(log_eps[max_loc]),np.exp(log_eps[max_loc+1])])
     d = np.round(2.*log_deriv[max_loc])
     return eps_opt,d
 
@@ -106,8 +120,8 @@ def get_nns(data,period=None,nneighb=None,M=1,sort=False):
     ----------
     data : 2D array-like
         The location of every data point in the space
-    period: array-like or scalar, optional
-        Periodicity of the space in each dimension.
+    period : 1D array-like or float, optional
+        Period of the coordinate, e.g. 360 for an angle in degrees. If None, all collective variables are taken to be aperiodic.  If scalar, assumed to be period of each collective variable. If 1D array-like with each value a scalar or None, each cv has periodicity of that size.
     nneighb : int or None, optional
         Number of nearest neighbors to calculate.  If None, calculates all nearest neighbor distances.
     M : int or 2D array-like, optional
@@ -123,6 +137,11 @@ def get_nns(data,period=None,nneighb=None,M=1,sort=False):
         Squared distance between points in the neighborlist.  If D is provided, this matrix is weighted.
         
     """
+    if period is not None: # Periodicity provided.
+        if not hasattr(period,'__getitem__'): # Check if period is scalar
+            period = [period]
+    else:
+        period = [None]*len(data[0])
     npnts = len(data)
     if nneighb == None:
         nneighb = npnts
