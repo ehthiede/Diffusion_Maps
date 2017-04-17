@@ -5,7 +5,7 @@ Code for calculating Kernel Density approximation of the density, as described i
 @author: erikthiede
 """
 import numpy as np
-
+import numbers
 
 def kde(data,rho=None,period=None,nneighb=None,d=None,nn_rho=8,epses=2.**np.arange(-40,41)):
     """Code implementing Kernel Density estimatation.  Algorithm is heavily based on that presented in Berry, Giannakis, and Harlim, Phys. Rev. E. 91, 032915 (2015). 
@@ -108,7 +108,6 @@ def get_optimal_bandwidth(scaled_distsq,epses=2.**np.arange(-40,41)):
     # Find max of derivative of d(log(T))/d(log(epsilon)), get optimal eps, d
     log_deriv = np.diff(log_T)/np.diff(log_eps)
     max_loc = np.argmax(log_deriv)
-    print np.exp(log_eps[max_loc]), np.exp(log_eps[max_loc+1])
     eps_opt = np.max([np.exp(log_eps[max_loc]),np.exp(log_eps[max_loc+1])])
     d = np.round(2.*log_deriv[max_loc])
     return eps_opt,d
