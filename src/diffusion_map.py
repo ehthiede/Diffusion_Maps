@@ -7,231 +7,202 @@ Created on Mon Jun  6 11:07:50 2016
 import numpy as np
 import scipy.sparse as sps
 import scipy.linalg as spl
-import gc
+import kde 
+import numbers
+from _NumericStringParser import _NumericStringParser
 
-def scaled_diffusion_map(data,epsilon,D=1.0,alpha=None,beta=None,period=None,nneighb=None,density=None,weights=None,d=None,return_full=False):
+def diffusion_map(data,rho=None,period=None,nneighb=None,D=1.0,weights=None,d=None,alpha='0.5',beta='0',epses=2.**np.arange(-40,41),rho_norm=True,return_full=False):
     """
-    Code implementing the Variable Bandwidth Diffusion Map algorithm by Berry and Harlim (see section 3).
-
-    Parameters
-    ----------
-    data : ndarray
-        Data to create the diffusion map on.  Can either be a one-dimensional time series, or a timeseries of Nxk, where N is the number of data points and k is the dimensionality of data.
-    epsilon : float
-        Diffusion map lengthscale parameter
-    D : scalar or 2D array-like, optional
-        Diffusion tensor for the system.  If scalar, this is taken to be a diagonal matrix with the scaler on the diagonal.  If array, the array must be square..  Default value is 1.0.
-    alpha : float, optional
-        Diffusion map parameter, the exponent on the inverse of the density estimate in front of the Kernel: see Berry and Harlim for more details.  Default value is 0.5
-    beta : float, optional
-        Diffusion map parameter, the exponent of the density estimate in the Bandwidth scaling the distances.  Default value is 0.0 (No Bandwidth scaling)
-    period : 1D array-like or float, optional
-        Period of the collective variable e.g. 360 for an angle. If None, all collective variables are taken to be aperiodic.  If scalar, assumed to be period of each collective variable. If 1D iterable with each value a scalar or None, each cv has periodicity of that size.
-    nneighb : int, optional
-        Approximate number of nearest neighbors to keep for each state in the kernel matrix.  This introduces a truncation error into the diffusion map.  However, due to exponential decay of the Kernel, this is generally negligible.  Default is None, i.e. to keep all neighbors.
-    density : 1d array-like, optional
-        The stationary probability density of the process, given up to a constant multiple.  If provided, this is used to estimate the bandwidth in the numerator of the diffusion map.  If not provided, the density is instead estimated through Kernel density estimation.
-    weights : 1d array-like, optional
-        The ratio between the desired probability distribution and the sampled probability distribution.  Unless you are doing importance sampling or umbrella sampling, this should probably be one for each sample point (the default).
-    d : int, optional
-        Dimensionality of the system.  Default is the number of coordinates in each datapoint.  However, for some systems (e.g. a circlular orbit in 2D), this may be higher than the true dimensionality of the system.
-    return_full : bool, optional
-        If True, returns the expanded set of matrices and vectors.  
-    
-    Returns
-    -------
-    L : scipy sparse matrix
-        Diffusion map generator.  This is in a sparse matrix representation, a dense representation can be achieved by running L.toarray().
-    pi : ndarray
-        Stationary distribution of the generator.
-    Kmat : scipy sparse matrix, if return_full==True
-        Symmetric Kernel matrix used to construct L.
-    rho : ndarray, if return_full==True
-        Bandwidth used to construct K and L.
-
-    """
-    if len(np.shape(data)) == 1: # If data is 1D, make it 2D so indices work
-        data = np.array([data])
-        data = np.transpose(data)
-    # Initialize variables
-    ndim = len(data[0]) 
-    npnts = len(data)
-    
-
-    if len(np.shape(data)) == 1:
-        data = np.transpose([data])
-    if d is None:
-        d = len(data[0]) # Number of dimensions
-    N = len(data) # Number of datapoints
-    if nneighb is None:
-        nneighb = N # Use full data set.
-    if density is not None:
-        if len(density) != N:
-            raise Exception
-    if alpha is None:
-        alpha = -1.*d/4.
-    if beta is None:
-        beta = -0.5
-
-    if period is not None: # Periodicity provided.
-        if not hasattr(period,'__getitem__'): # Check if period is scalar
-            period = [period]
-    else:
-        period = [None]*len(data[0])
-
-    data = np.array([dat for dat in data]) # Clean the data.
-    nn_indices, nn_distsq = get_nns(data,period,nneighb)
-
-    ##### If no density provided, calculate initial estimate of the probability density
-    if beta == 0:
-        rho = np.ones(len(data))
-    elif density is None:
-#    if True:
-        rho0= np.sqrt(np.sum(nn_distsq[:,:8],axis=1)/(8-1)) # Initial bandwidth for KDE
-        q0 = np.copy(nn_distsq)
-        for i, row in enumerate(q0):
-            row /= 2.*rho0[i]*rho0[nn_indices[i]]
-        q0 = np.sum(np.exp(-q0),axis=1)
-        q0 /= (rho0**d) 
-        q0 *= (2.*np.pi)**(-d/2.) /len(q0)
-        rho = q0**beta # Bandwidth for the Diffusion Map.
-        # Delete unused datastructures
-        del q0
-        del rho0
-    else:
-        rho = density**beta
-    # Normalize values to make epsilon choices commensurate....
-    rho /= np.median(rho)
-
-    ##### Calculate the new Kernel.
-    try:
-        Dinv = spl.inv(D)
-    except:
-        Dinv = 1./D
-    print 'Dinv is ', Dinv
-    nn_indices, nn_distsq = get_nns(data,period,nneighb,Dinv=Dinv)
-    # Create the Sparse Kernel Matrix
-    K = np.copy(nn_distsq)
-    for i, row in enumerate(K):
-        row /= 4.*epsilon*rho[i]*rho[nn_indices[i]]
-    K = np.exp(-K) # Value of the Kernel fxn for Dmaps
-    # We first convert to sparse matrix format.
-    rows = np.outer(np.arange(N),np.ones(nneighb))
-    Kmat = sps.csr_matrix((K.flatten(),(rows.flatten(),nn_indices.flatten())),shape=(N,N))
-    gc.collect()
-    # We symmetrize K.
-    Ktrans = Kmat.transpose()
-    dKmat = (Kmat -Ktrans)
-    dKmat = dKmat.multiply(dKmat.sign())
-    dKmat /= 2.
-    Kmat = Kmat + Ktrans
-    Kmat /= 2.
-    Kmat = Kmat + dKmat
-    
-    if density is None:
-        q = np.array(Kmat.sum(axis=1)).flatten()
-        q /= (rho**d)
-    else:
-        q = density
-    diagq = sps.dia_matrix((1./(q**alpha),[0]),shape=(N,N))
-#    Kmat = diagq * Kmat * diagq
-    Kmat = diagq * Kmat 
-    Kmat = Kmat * diagq
-    del diagq
-    if weights is not None:
-        print 'found weight vector'
-        diag_wt = sps.dia_matrix((weights**0.5,[0]),shape=(N,N))
-#        diag_wt = sps.dia_matrix((weights,[0]),shape=(N,N))
-        Kmat = diag_wt * Kmat
-        Kmat = Kmat * diag_wt
-        del diag_wt
-    q_alpha = np.array(Kmat.sum(axis=1)).flatten()
-    diagq_alpha = sps.dia_matrix((1./(q_alpha),[0]),shape=(N,N))
-    L = diagq_alpha * Kmat # Normalize each of the rows of the matrix
-    diag = L.diagonal()-1.
-    L.setdiag(diag)
-    diag_norm = sps.dia_matrix((1./(rho**2*epsilon),0),shape=(N,N))
-    L = diag_norm * L
-    pi = rho**2* q_alpha
-    pi /= np.sum(pi)
-    if return_full:
-        return L,pi, Kmat, rho, q
-    else:
-        return L,pi 
-
-def get_nns(data,period=None,nneighb=64,Dinv=1):
-    """
-    get the indices of the nneighb nearest neighbors, and calculate the distance to them
+    Routine that creates a diffusion map.  A diffusion map is a transition rate matrix that accounts for the local structure of the data.
 
     Parameters
     ----------
     data : 2D array-like
-        The location of every data point in the space
-    period: array-like or scalar
-        Periodicity of the space in each dimension.
-    nneighb : int
-        Number of nearest neighbors to calculate.
+        Two-dimensional dataset used to create the diffusion map.
+    rho : 1d array-like or None, optional
+        Bandwidth function to be used in the variable bandwdith kernel.  If None, the code estimates the density of the data q using a kernel density estimate, and sets the bandwdith to q_\epsilon^beta
+    period : 1D array-like or float, optional
+        Period of the coordinate, e.g. 360 for an angle in degrees. If None, all coordinates are taken to be aperiodic.  If scalar, assumed to be period of each coordinate. If 1D array-like with each value a scalar or None, each coordinate has periodicity of that size.
+    nneighb : int or None, optional
+        Number of neighbors to include in constructing the diffusion map.  Default is None, which corresponds to using all neighbors.
+    D : float or 2D square array-like, optional
+        The diffusion tensor to be used in the system.  If float, is taken to be isotropic diffusion with that float on the diagonal.  If an array, is taken to be a positive definite diffusion matrix.  The distance used to construct the diffusion map will be (x-y)^T D^{-1} (x-y).  Default value is 1., or the identity.
+    weights : 1D array-like or None, optional
+        Importance sampling weights for each datapoint, w(x). 
+    d : int or None, optional
+        Dimension of the system. If None, dimension is estimated using the kernel density estimate, if a kernel density estimate is performed.
+    alpha : float or string, optional
+        Parameter for left normalization of the Diffusion map.  Either a float, or a string that cane be interpreted as a mathematical expression.  The variable "d" stands for dimension, so "1/d" sets the alpha to the system dimension.  Default is 0.5
+    beta : float or string, optional
+        Parameter for constructing the bandwidth function for the Diffusion map.  If rho is None, it will be set to q_\epsilon^beta, where q_\epsilon is an estimate of the density.  If rho is provided, this parameter is unused.  As with alpha, this will interpret strings that are evaluatable expressions.  Default is 0.0
+    epses: float or 1d array, optional
+        Bandwidth constant to use.  If float, uses that value for the bandwidth.  If array, performs automatic bandwidth detection according to the algorithm given by Berry and Giannakis and Harlim.  Default is all powers of 2 from 2^-40 to 2^40.
+    rho_norm : bool, optional
+        Whether or not to normalize q and L by rho(x)^2.  Default is True (perform normalization)
+    return_full : bool, optional
+        Whether or not to return expanded output.  Default is False.
 
     Returns
     -------
-    indices : 2D array
-        indices of the nearest neighbers.  Element i,j is the j'th nearest neighbor of the i'th data point.  
-    distsq : 2D array
-        Squared distance between points in the neighborlist.
-        
+    L : scipy sparse matrix
+        The diffusion map operator.  This is a transition rate matrix whose rows sum to zero.
+    pi : 1D numpy array
+        The stationary distribution of the chain. pi.L should be the vector of all zeros.
+    K : scipy sparse matrix, optional
+        The symmetric kernel matrix used to construct the diffusion map.  Returned if return_full is set to True.
+    rho : 1D numpy array, optional
+        The bandwidth function used.  Returned if return_full is set to True.
+    q_alpha : 1D numpy array, optional
+        Row sum used to normalize the transition matrix in the Diffusion map.  Returned if return_full is set to True.
+    epsilon : float, optional
+        Bandwidth constant used in the calculation.  Returned if return_full is set to True.
     """
-    npnts = len(data)
-    indices = np.zeros((npnts,nneighb),dtype=np.int)
-    distsq = np.zeros((npnts,nneighb))
-    for i,pnt in enumerate(data):
-        dx = pnt - data
-        # Enforce periodic boundary conditions.
-        for dim in xrange(len(pnt)):
-            p = period[dim]
-            if p is not None:
-                dx[:,dim] -= p*np.rint(dx[:,dim]/p)
-                
-        dsq_i = np.sum(dx*np.dot(dx,Dinv),axis=1)  
-        # Find nneighb largest elements
-        ui_i = np.argpartition(dsq_i,nneighb-1)[:nneighb] #unsorted indices
-        ud_i = dsq_i[ui_i] # unsorted distances
-        sorter = ud_i.argsort()
-        indices[i] = ui_i[sorter]
-        distsq[i] = ud_i[sorter]
-    return indices, distsq
+    ## Default Parameter Selection and Type Cleaning
+    if len(np.shape(data)) == 1: # If data is 1D, make it 2D so indices work
+        data = np.array([data])
+        data = np.transpose(data)
+    N = len(data)
+    if rho is None: # If no bandwidth fxn given, get one from KDE.
+        rho = get_bandwidth_fxn(data,period,nneighb,beta,d)
 
+    # Evaluate scaled distances
+    try:
+        Dinv = spl.inv(D)
+    except:
+        Dinv = 1./D
+    nn_indices, nn_distsq = kde.get_nns(data,period,nneighb,M=Dinv)
+    for i, row in enumerate(nn_distsq):
+        row /= rho[i]*rho[nn_indices[i]]
+    old_distsq_sc = np.copy(nn_distsq)
+
+    # Calculate optimal bandwidth
+    if isinstance(epses,numbers.Number):
+        epsilon = epses
+    else:
+        epsilon, d_est = kde.get_optimal_bandwidth(nn_distsq,epses=epses)
+        if d is None: # If dimensionality is not provided, use estimated value.
+            d = d_est
+
+    # Construct sparse kernel matrix.
+    nn_distsq /= epsilon
+    nn_distsq = np.exp(-nn_distsq) # Value of the Kernel fxn for Dmaps
+    rows = np.outer(np.arange(N),np.ones(nneighb))
+    K = sps.csr_matrix((nn_distsq.flatten(),
+                       (rows.flatten(),nn_indices.flatten())),shape=(N,N))
+
+    # Symmetrize K using 'or' operator.
+    Ktrans = K.transpose()
+    dK = abs(K -Ktrans)
+    K = K + Ktrans
+    K = K + dK
+    K *= 0.5
+
+    # Apply q^alpha normalization.
+    q = np.array(K.sum(axis=1)).flatten()
+    if rho_norm:
+        if np.any(rho-1.):
+            if d is None:
+                raise ValueError('Dimensionality needed to normalize the density estimate , but no dimensionality information found or estimated.'%param)
+        q /= (rho**d)
+    alpha = _eval_param(alpha,d)
+    diagq = sps.dia_matrix((1./(q**alpha),[0]),shape=(N,N))
+    K = diagq * K 
+    K = K * diagq
+
+    # Apply importance sampling weights if provided.
+    if weights is not None:
+        diag_wt = sps.dia_matrix((weights**0.5,[0]),shape=(N,N))
+        K = diag_wt * K
+        K = K * diag_wt
+
+    # Normalize to Transition Rate Matrix
+    q_alpha = np.array(K.sum(axis=1)).flatten()
+    diagq_alpha = sps.dia_matrix((1./(q_alpha),[0]),shape=(N,N))
+    L = diagq_alpha * K # Normalize row sum to one.
+    diag = L.diagonal()-1.
+    L.setdiag(diag) #  subtract identity.
+
+    # Normalize matrix by epsilon, and (if specified) by bandwidth fxn. 
+    if rho_norm:
+        diag_norm = sps.dia_matrix((1./(rho**2*epsilon),0),shape=(N,N))
+    else:
+        diag_norm = sps.eye(N)*(1./epsilon)
+        pi = q_alpha
+    L = diag_norm * L
+
+    # Calculate stationary density.
+    if rho_norm:
+        pi = rho**2* q_alpha
+    else:
+        pi = q_alpha
+    pi /= np.sum(pi)
+
+    # Return calculated quantities.
+    if return_full:
+        return L,pi, K, rho, q_alpha, epsilon
+    else:
+        return L,pi
+
+
+def get_bandwidth_fxn(data,period=None,nneighb=None,beta='-1/d',d=None):
+    """
+    Constructs a bandwidth function for a given dataset.  Performs a kernel density estimate q_\epsilon, and sets the bandwidth to q_epsilon^beta. 
     
-def _minimage_traj(rv,period):
-    """Calculates the minimum trajectory
+    Parameters
+    ----------
+    data : 2D array-like
+        Two-dimensional dataset used to create the diffusion map.
+    period : 1D array-like or float, optional
+        Period of the coordinate, e.g. 360 for an angle in degrees. If None, all coordinates are taken to be aperiodic.  If scalar, assumed to be period of each coordinate. If 1D array-like with each value a scalar or None, each coordinate has periodicity of that size.
+    nneighb : int or None, optional
+        Number of neighbors to include in constructing the diffusion map.  Default is None, which corresponds to using all neighbors.
+    beta : float or string, optional
+        Parameter for constructing the bandwidth function for the Diffusion map.  If rho is None, it will be set to q_\epsilon^beta, where q_\epsilon is an estimate of the density.  If rho is provided, this parameter is unused.  As with alpha, this will interpret strings that are evaluatable expressions.  Default is 0.0
+    d : int or None, optional
+        Dimension of the system. If None, dimension is estimated using the kde.
+
+    Returns
+    -------
+    rho : 1d array
+        The estimated bandwidth function.
+    """
+    N = len(data)
+    if ((beta == 0) or (beta == '0')):
+        return np.ones(N)  # Handle uniform bandwidth case.
+    else:
+        # Use q^beta as bandwidth, where q is an estimate of the density.
+        q,d_est,eps_opt = kde.kde(data,period=period,nneighb=nneighb)
+        if d is None:
+            d = d_est
+        
+        # If beta parameter is an expression, evaluate it and convert to float
+        beta = _eval_param(beta,d)
+        return q**beta
+
+
+def _eval_param(param,d):
+    """
+    Evaluates the alpha or beta parameters.  For instance, if the user passes "1/d", this must be converted to a float.
 
     Parameters
     ----------
-    rv : 1 or 2D array-like 
-        Minimum image trajectory
-    period : array-like or scalar
-        Periodicity in each dimension.
+    param : float or string
+        The parameter to be evaluated.  Either a float or an evaluatable string, where "d" stands in for the system dimensionality.
+    d : int
+        Dimensionality of the system.
 
     Returns
     -------
-    minimage : array-like
-        minimum image trajectory
+    eval_param : float
+        The value of the parameter, evaluated.
     """
-    rvmin = np.array(np.copy(rv))
-    if len(np.shape(rv)) == 1: # 1D trajectory array provided
-        if period is not None:
-            p = period[0]
-            if (p is not None) and (p != 0): 
-                rvmin -= p*np.rint(rvmin/p)
-
-    elif len(np.shape(rv)) == 2: # 2D trajectory array provided
-        ndim = len(rv[0])
-        if period is not None:
-            for d in xrange(ndim):
-                p = period[d]
-                if (p is not None) and (p != 0): 
-                    rvmin[:,d]-= p*np.rint(rvmin[:,d]/p)
-    else: # User provided something weird...
-        raise ValueError("Trajectory provided has wrong dimensionality %d, "+ \
-            "dimension should be 1 or 2."%len(np.shape(rv)))
-    return rvmin
+    nsp = _NumericStringParser()
+    if type(param) is str:
+        if 'd' in param:
+            if d is None:
+                raise ValueError('Dimensionality needed in evaluating %s, but no dimensionality information found or estimated.'%param)
+            param = param.replace('d',str(d))
+        return nsp.eval(param)
+    else:
+        return float(param)
 
