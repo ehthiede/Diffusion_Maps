@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Created on Mon Jun  6 11:07:50 2016
+Code that constructs a diffusion map.
 
 @author: erikthiede
 """

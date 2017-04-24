@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Created on Tue Jul 05 13:23:22 2016
+Routines for performing Galerkin expansions of the data.
 
 @author: Erik
 """
@@ -10,37 +10,20 @@ from scipy.sparse.linalg import eigsh
 import scipy.sparse as sps
 import scipy.linalg as spl
 import linalg as LA
-from diffusion_map import scaled_diffusion_map
+#from diffusion_map import diffusion_map
 
-
-def get_generator(evecs,dt_eff=1.,normalize=False):
+def get_generator(evecs,delay=1,dt_eff=1.,normalize=False):
+    """
+    Constructs an approximation of the generator.
+    """
     N = len(evecs)
     if normalize:
         evec_norm = np.linalg.norm(evecs,axis=0)
         evecs*= np.sqrt(N)/evec_norm
-    du = np.diff(evecs,axis=0)/dt_eff
+    du = evecs[delay:] - evecs[:-1*delay]
+    du /= dt_eff * delay
     A = np.dot(np.transpose(evecs[:-1]),du)/(N-1)
     return A
-
-def _sort_esystem(evals,evecs):
-    idx = evals.argsort()[::-1]
-    evals = evals[idx]
-    evecs = evecs[:,idx]
-    return evals, evecs
-
-def get_Dmap_evecs(data,epsilon,nevecs,alpha=None,beta=None,weights=None,D=1,period=None,nneighb=200):
-    L, K, rho, q = scaled_diffusion_map(data,epsilon,weights=weights,D=D,alpha=alpha,beta=beta,period=period,nneighb=nneighb)
-    N= len(q)
-    Sinvdiag = 1./(rho*np.sqrt(q))
-    Sinv = sps.dia_matrix((Sinvdiag,[0]),shape=(N,N))
-    Pinv2 = sps.dia_matrix((1./rho**2,[0]),shape=(N,N))
-    Lhat = Sinv * K * Sinv
-    Lhat= (Lhat - Pinv2)
-    Lhat = Lhat.multiply(1./epsilon)
-    sigma = -1.
-    evals, evecs = eigsh(Lhat,sigma=sigma,which='LM',k=nevecs,mode='normal')
-    evals, evecs = _sort_esystem(evals,evecs)
-    return evals,evecs
 
 def get_beta(evecs,f):
     N = len(f)
