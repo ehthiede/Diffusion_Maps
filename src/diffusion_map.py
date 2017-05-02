@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Created on Mon Jun  6 11:07:50 2016
+Code that constructs a diffusion map.
 
 @author: erikthiede
 """
@@ -11,9 +11,8 @@ import kde
 import numbers
 from _NumericStringParser import _NumericStringParser
 
-def diffusion_map(data,rho=None,period=None,nneighb=None,D=1.0,weights=None,d=None,alpha='0.5',beta='0',epses=2.**np.arange(-40,41),rho_norm=True,return_full=False):
-    """
-    Routine that creates a diffusion map.  A diffusion map is a transition rate matrix that accounts for the local structure of the data.
+def diffusion_map(data,rho=None,period=None,nneighb=None,D=1.0,weights=None,d=None,alpha='0.5',beta='0',epses=2.**np.arange(-40,41),rho_norm=True,return_full=False,verbosity=0):
+    """Routine that creates a diffusion map.  A diffusion map is a transition rate matrix that accounts for the local structure of the data.
 
     Parameters
     ----------
@@ -41,6 +40,8 @@ def diffusion_map(data,rho=None,period=None,nneighb=None,D=1.0,weights=None,d=No
         Whether or not to normalize q and L by rho(x)^2.  Default is True (perform normalization)
     return_full : bool, optional
         Whether or not to return expanded output.  Default is False.
+    verbosity : int, optional
+        Whether to print verbose output.  If 0 (default), no updates are printed.  If 1, prints results of automated bandwidth and dimensionality routines.  If 2, prints program status updates.
 
     Returns
     -------
@@ -56,6 +57,7 @@ def diffusion_map(data,rho=None,period=None,nneighb=None,D=1.0,weights=None,d=No
         Row sum used to normalize the transition matrix in the Diffusion map.  Returned if return_full is set to True.
     epsilon : float, optional
         Bandwidth constant used in the calculation.  Returned if return_full is set to True.
+
     """
     ## Default Parameter Selection and Type Cleaning
     if len(np.shape(data)) == 1: # If data is 1D, make it 2D so indices work
@@ -64,6 +66,7 @@ def diffusion_map(data,rho=None,period=None,nneighb=None,D=1.0,weights=None,d=No
     N = len(data)
     if rho is None: # If no bandwidth fxn given, get one from KDE.
         rho = get_bandwidth_fxn(data,period,nneighb,beta,d)
+        if verbosity >= 1 : print "No Diffusion Map Bandwidth given.  Bandwidth constructed using a KDE"
 
     # Evaluate scaled distances
     try:
@@ -78,10 +81,13 @@ def diffusion_map(data,rho=None,period=None,nneighb=None,D=1.0,weights=None,d=No
     # Calculate optimal bandwidth
     if isinstance(epses,numbers.Number):
         epsilon = epses
+        if verbosity >= 1 : print "Epsilon provided by the User: %f"%epsilon
     else:
         epsilon, d_est = kde.get_optimal_bandwidth(nn_distsq,epses=epses)
+        if verbosity >= 1 : print "Epsilon automatically detected to be : %f"%epsilon
         if d is None: # If dimensionality is not provided, use estimated value.
             d = d_est
+            if verbosity >= 1 : print "Dimensionality estimated to be %d."% d
 
     # Construct sparse kernel matrix.
     nn_distsq /= epsilon
@@ -89,6 +95,7 @@ def diffusion_map(data,rho=None,period=None,nneighb=None,D=1.0,weights=None,d=No
     rows = np.outer(np.arange(N),np.ones(nneighb))
     K = sps.csr_matrix((nn_distsq.flatten(),
                        (rows.flatten(),nn_indices.flatten())),shape=(N,N))
+    if verbosity >= 2 : print "Evaluated Kernel"
 
     # Symmetrize K using 'or' operator.
     Ktrans = K.transpose()
@@ -100,14 +107,15 @@ def diffusion_map(data,rho=None,period=None,nneighb=None,D=1.0,weights=None,d=No
     # Apply q^alpha normalization.
     q = np.array(K.sum(axis=1)).flatten()
     if rho_norm:
-        if np.any(rho-1.):
+        if np.any(rho-1.): # Check if bandwidth function is nonuniform. 
             if d is None:
                 raise ValueError('Dimensionality needed to normalize the density estimate , but no dimensionality information found or estimated.'%param)
-        q /= (rho**d)
+            q /= (rho**d)
     alpha = _eval_param(alpha,d)
     diagq = sps.dia_matrix((1./(q**alpha),[0]),shape=(N,N))
     K = diagq * K 
     K = K * diagq
+    if verbosity >= 2 : print r"Applied q**\alpha normalization."
 
     # Apply importance sampling weights if provided.
     if weights is not None:
@@ -121,6 +129,7 @@ def diffusion_map(data,rho=None,period=None,nneighb=None,D=1.0,weights=None,d=No
     L = diagq_alpha * K # Normalize row sum to one.
     diag = L.diagonal()-1.
     L.setdiag(diag) #  subtract identity.
+    if verbosity >= 2 : print r"Applied q**\alpha normalization."
 
     # Normalize matrix by epsilon, and (if specified) by bandwidth fxn. 
     if rho_norm:
@@ -129,6 +138,7 @@ def diffusion_map(data,rho=None,period=None,nneighb=None,D=1.0,weights=None,d=No
         diag_norm = sps.eye(N)*(1./epsilon)
         pi = q_alpha
     L = diag_norm * L
+    if verbosity >= 2 : print "Normalized matrix to transition rate matrix."
 
     # Calculate stationary density.
     if rho_norm:
@@ -136,9 +146,11 @@ def diffusion_map(data,rho=None,period=None,nneighb=None,D=1.0,weights=None,d=No
     else:
         pi = q_alpha
     pi /= np.sum(pi)
+    if verbosity >= 2 : print "Estimated Stationary Distribution."
 
     # Return calculated quantities.
     if return_full:
+        if verbosity >= 2 : print "Returning Expanded Output"
         return L,pi, K, rho, q_alpha, epsilon
     else:
         return L,pi
