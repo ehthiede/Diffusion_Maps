@@ -7,7 +7,7 @@ Code for calculating Kernel Density approximation of the density, as described i
 import numpy as np
 import numbers
 
-def kde(data,rho=None,period=None,nneighb=None,d=None,nn_rho=8,epses=2.**np.arange(-40,41)):
+def kde(data,rho=None,period=None,nneighb=None,d=None,nn_rho=8,epses=2.**np.arange(-40,41),verbosity=0):
     """Code implementing Kernel Density estimatation.  Algorithm is heavily based on that presented in Berry, Giannakis, and Harlim, Phys. Rev. E. 91, 032915 (2015). 
 
     Parameters
