@@ -67,6 +67,8 @@ def diffusion_map(data,rho=None,period=None,nneighb=None,D=1.0,weights=None,d=No
     if rho is None: # If no bandwidth fxn given, get one from KDE.
         rho = get_bandwidth_fxn(data,period,nneighb,beta,d)
         if verbosity >= 1 : print "No Diffusion Map Bandwidth given.  Bandwidth constructed using a KDE"
+    if nneighb is None:
+        nneighb = N
 
     # Evaluate scaled distances
     try:
