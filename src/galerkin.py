@@ -79,16 +79,17 @@ def get_ht(evecs,state_A,dt_eff=1.,normalize=False):
     L_A = np.dot(np.transpose(evecs)*state_A,evecs)/N
     mod_Gen = L_prop+L_A
 
-    b =  np.dot(np.transpose(evecs),(1-state_A))/N
+    b =  np.dot(np.transpose(evecs),(state_A-1))/N
     try:
+        np.save('L_prop',L_prop)
+        np.save('L_A',L_A)
         x = spl.solve(mod_Gen,b)
     except:
         print mod_Gen
-        print L_A
-        print L_B
+        print b
         raise
     tau = np.dot(evecs,x)
-    return tau
+    return tau,x
     
     
 def get_tau(data,epsilon,nevecs,alpha=None,beta=None,weights=None,D=1,period=None,nneighb=200,normalize=False):
