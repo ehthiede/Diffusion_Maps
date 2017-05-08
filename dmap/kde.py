@@ -102,10 +102,6 @@ def get_optimal_bandwidth(scaled_distsq,epses=2.**np.arange(-40,41)):
         kernel = np.exp(-scaled_distsq/float(eps))
         log_T.append(np.log(np.average(kernel)))
         log_eps.append(np.log(eps))
-
-    #### DEBUG ####
-    np.save('log_T.npy',log_T)
-    ###############
     
     # Find max of derivative of d(log(T))/d(log(epsilon)), get optimal eps, d
     log_deriv = np.diff(log_T)/np.diff(log_eps)
