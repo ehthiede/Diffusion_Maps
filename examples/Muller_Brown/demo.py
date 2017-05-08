@@ -50,3 +50,10 @@ plt.colorbar(SC,ax=ax4)
 ax4.set_title(r'evec 4, $\lambda=$%.3e'%evals[3])
 plt.tight_layout()
 plt.show()
+
+# Finally, we plot the data in the two diffusion coordinates.
+
+plt.scatter(evecs[:,1],evecs[:,2],s=4)
+plt.xlabel('Eigenvector 2')
+plt.ylabel('Eigenvector 3')
+plt.show()
