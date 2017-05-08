@@ -26,6 +26,8 @@ def kde(data,rho=None,period=None,nneighb=None,d=None,nn_rho=8,epses=2.**np.aran
         Number of nearest neighbors to use when constructing the automatic bandwidth function.  Default is 8.  If rho is provided by the user, this does nothing.
     epses : array-like, optional
         Epsilon values to be used for automatic bandwidth detection.  Requires at least three values.  Default is powers of 2 between 2^40 and 2^-40.  Note that the optimal epsilon value used will actually be *between* these values, due to it being estimated using a central difference of a function of the epsilon values. 
+    verbosity : int, optional
+        Whether to print verbose output.  If 0 (default), no updates are printed.  If 1, prints results of automated bandwidth and dimensionality routines.  If 2, prints program status updates.  CURRENTLY DOESN'T DO ANYTHING, TODO: ADD VERBOSE MESSAGES!
 
     Returns
     -------

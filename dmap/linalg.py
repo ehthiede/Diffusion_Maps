@@ -54,30 +54,29 @@ def stationary_distrib(F,residtol = 1.E-10,max_iter=100):
 
     return z/np.sum(z) # Return normalized (by convention)
    
+def _sort_esystem(evals,evecs):
+    """
+    Sorts an eigenvector system in order of descending eigenvalue.
 
-def old_stationary_distrib(F,fix=None,residtol = 1.E-10,max_iter=100):
-    L = len(F) # Number of States
-    # If no fixed state is specified, we find a state with high weight in z.
-    if fix is None:
-        testz = stationary_distrib(F,1)
-        fix = np.argmax(testz)
-    #We get the matrix subminor, and the fix'th row of F
-    submat = _submatrix(F,fix)
-    Fi = F[fix,:]
-    # (I-Fsub)^T
-    ImFt = np.transpose(np.eye(L-1)-submat)
-    Fi = np.delete(Fi,fix)
-    z = solve(ImFt,Fi)  # Partition fxns of the other states.
-    z = np.insert(z,fix,1.0) # Put the state we fixed to 1. back in
-    # Polish solution using power method.
-    for itr in xrange(max_iter):
-        znew = np.dot(z,F)
-        maxresid = np.max(np.abs(znew - z)/z) # Convergence Criterion 
-        if maxresid < residtol:
-            break
-        else:
-            z = znew
-    return z/np.sum(z)
+    Parameters
+    ----------
+    evals : 1D array-like
+        1D structure containing the eigenvalues.  Must be sortable.
+    evecs : 2D array-like
+        Data structure containing the eigenvectors.  Column i the eigenvector corresponding to evals[i].
+
+    Returns
+    -------
+    evals : 1D array-like
+        Sorted eigenvalues.
+    evals : 1D array-like
+        Sorted eigenvetors.
+    """
+    idx = evals.argsort()[::-1]
+    evals = evals[idx]
+    evecs = evecs[:,idx]
+    return evals, evecs
+
 
 def _submatrix(F,i):
     """

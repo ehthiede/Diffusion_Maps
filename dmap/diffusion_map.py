@@ -64,9 +64,14 @@ def diffusion_map(data,rho=None,period=None,nneighb=None,D=1.0,weights=None,d=No
         data = np.array([data])
         data = np.transpose(data)
     N = len(data)
+    d_kde = None # Density estimate from kde
     if rho is None: # If no bandwidth fxn given, get one from KDE.
-        rho = get_bandwidth_fxn(data,period,nneighb,beta,d)
-        if verbosity >= 1 : print "No Diffusion Map Bandwidth given.  Bandwidth constructed using a KDE"
+        rho,d_kde = get_bandwidth_fxn(data,period,nneighb,beta,d)
+        if verbosity >= 1 : 
+            if d_kde is None:
+                print "No Diffusion Map Bandwidth given.  Bandwidth constructed using a KDE.  No dimensionality info detected."
+            else:
+                print "No Diffusion Map Bandwidth given.  Bandwidth constructed using a KDE.  KDE dimension is %d"%d_kde
     if nneighb is None:
         nneighb = N
 
@@ -111,7 +116,10 @@ def diffusion_map(data,rho=None,period=None,nneighb=None,D=1.0,weights=None,d=No
     if rho_norm:
         if np.any(rho-1.): # Check if bandwidth function is nonuniform. 
             if d is None:
-                raise ValueError('Dimensionality needed to normalize the density estimate , but no dimensionality information found or estimated.'%param)
+                if d_kde is None:
+                    raise ValueError('Dimensionality needed to normalize the density estimate , but no dimensionality information found or estimated.')
+                else:
+                    d = d_kde
             q /= (rho**d)
     alpha = _eval_param(alpha,d)
     diagq = sps.dia_matrix((1./(q**alpha),[0]),shape=(N,N))
@@ -182,7 +190,7 @@ def get_bandwidth_fxn(data,period=None,nneighb=None,beta='-1/d',d=None):
     """
     N = len(data)
     if ((beta == 0) or (beta == '0')):
-        return np.ones(N)  # Handle uniform bandwidth case.
+        return np.ones(N),None  # Handle uniform bandwidth case.
     else:
         # Use q^beta as bandwidth, where q is an estimate of the density.
         q,d_est,eps_opt = kde.kde(data,period=period,nneighb=nneighb)
@@ -191,7 +199,7 @@ def get_bandwidth_fxn(data,period=None,nneighb=None,beta='-1/d',d=None):
         
         # If beta parameter is an expression, evaluate it and convert to float
         beta = _eval_param(beta,d)
-        return q**beta
+        return q**beta,d
 
 
 def _eval_param(param,d):
