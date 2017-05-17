@@ -9,7 +9,7 @@ __maintainer__ = "Erik Henning Thiede"
 __email__ = "thiede@uchicago.edu"
 
 import diffusion_map
-import galerkin
+#import galerkin
 #import linalg
 #import usutils
 
