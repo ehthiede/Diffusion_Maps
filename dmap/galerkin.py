@@ -11,7 +11,7 @@ import scipy.linalg as spl
 import linalg as LA
 #from diffusion_map import diffusion_map
 
-def get_generator(evecs,delay=1,dt_eff=1.,normalize=False):
+def get_generator(evecs,delay=1,dt_eff=1.,normalize=True):
     """
     Constructs an approximation of the generator.
     """
@@ -21,12 +21,24 @@ def get_generator(evecs,delay=1,dt_eff=1.,normalize=False):
         evecs*= np.sqrt(N)/evec_norm
     du = evecs[delay:] - evecs[:-1*delay]
     du /= dt_eff * delay
-    A = np.dot(np.transpose(evecs[:-1]),du)/(N-1)
+    A = np.dot(np.transpose(evecs[:-1*delay]),du)/(1.*N-delay)
     return A
 
-def get_beta(evecs,f):
+def get_reverse_generator(evecs,delay=1,dt_eff=1.,normalize=False):
+    """
+    Constructs an approximation of the generator.
+    """
+    N = len(evecs)
+    if normalize:
+        evec_norm = np.linalg.norm(evecs,axis=0)
+        evecs*= np.sqrt(N)/evec_norm
+    du =  evecs[:-1*delay] - evecs[delay:]
+    du /= dt_eff * delay
+    A = np.dot(np.transpose(evecs[:-1*delay]),du)/(N-delay)
+
+def get_beta(evecs,f,delay=1):
     N = len(f)
-    beta = np.dot(f[:-1],evecs[:-1])/(N-1)
+    beta = np.dot(f[:-1*delay],evecs[:-1*delay])/(N-delay)
     return beta
 
 def get_committor_dense(evecs,state_A,state_B,complement=None,dt_eff=1.,normalize=False):

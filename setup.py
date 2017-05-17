@@ -11,10 +11,7 @@ setup(name='dmap',
         'Topic :: Scientific/Engineering'
         ],
 #    packages=find_packages(),
-#    package_dir=['emus'],
     packages=['dmap'],
-#    scripts=['scripts/wemus.py'],
-#    install_requires=['numpy','scipy','h5py','acor'],
     install_requires=['numpy','scipy'],
 
     )
