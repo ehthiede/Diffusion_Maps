@@ -68,7 +68,7 @@ def kde(data,rho=None,period=None,nneighb=None,d=None,nn_rho=8,epses=2.**np.aran
         row /= 2.*rho[i]*rho[nn_indices[i]]
 
     if isinstance(epses,numbers.Number):
-        epsilon = epses
+        eps_opt = epses
     else:
         eps_opt, d_est = get_optimal_bandwidth(scaled_distsq,epses=epses)
         if d is None: # If dimensionality is not provided, use estimated value.
@@ -81,7 +81,7 @@ def kde(data,rho=None,period=None,nneighb=None,d=None,nn_rho=8,epses=2.**np.aran
             raise ValueError('Dimensionality needed to normalize the density estimate , but no dimensionality information found or estimated.'%param)
     q0 /= (rho**d) 
     q0 *= (2.*np.pi)**(-d/2.) /len(q0)
-    return q0, d_est, eps_opt
+    return q0, d, eps_opt
 
 def get_optimal_bandwidth(scaled_distsq,epses=2.**np.arange(-40,41)):
     """Calculates the optimal bandwidth for kernel density estimation, according to the algorithm of Berry and Harlim.
