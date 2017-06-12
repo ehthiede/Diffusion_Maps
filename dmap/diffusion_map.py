@@ -66,7 +66,7 @@ def diffusion_map(data,rho=None,period=None,nneighb=None,D=1.0,weights=None,d=No
     N = len(data)
     d_kde = None # Density estimate from kde
     if rho is None: # If no bandwidth fxn given, get one from KDE.
-        rho,d_kde = get_bandwidth_fxn(data,period,nneighb,beta,d)
+        rho,d_kde = get_bandwidth_fxn(data,period,nneighb,epses=epses,beta=beta,d=d)
         if verbosity >= 1 : 
             if d_kde is None:
                 print "No Diffusion Map Bandwidth given.  Bandwidth constructed using a KDE.  No dimensionality info detected."
@@ -166,7 +166,7 @@ def diffusion_map(data,rho=None,period=None,nneighb=None,D=1.0,weights=None,d=No
         return L,pi
 
 
-def get_bandwidth_fxn(data,period=None,nneighb=None,beta='-1/d',d=None):
+def get_bandwidth_fxn(data,period=None,nneighb=None,epses=2.**np.arange(-40,41),beta='-1/d',d=None):
     """
     Constructs a bandwidth function for a given dataset.  Performs a kernel density estimate q_\epsilon, and sets the bandwidth to q_epsilon^beta. 
     
@@ -193,7 +193,8 @@ def get_bandwidth_fxn(data,period=None,nneighb=None,beta='-1/d',d=None):
         return np.ones(N),None  # Handle uniform bandwidth case.
     else:
         # Use q^beta as bandwidth, where q is an estimate of the density.
-        q,d_est,eps_opt = kde.kde(data,period=period,nneighb=nneighb)
+        print epses, 'epses', d, 'd', beta, 'beta'
+        q,d_est,eps_opt = kde.kde(data,epses=epses,period=period,nneighb=nneighb,d=d)
         if d is None:
             d = d_est
         
