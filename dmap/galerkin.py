@@ -9,115 +9,172 @@ from scipy.sparse.linalg import eigsh
 import scipy.sparse as sps
 import scipy.linalg as spl
 import linalg as LA
-#from diffusion_map import diffusion_map
+import data_manipulation as dm
 
-def get_generator(evecs,delay=1,dt_eff=1.,normalize=True):
+def get_generator(basis,traj_edges,delay=1,dt_eff=1.):
     """
     Constructs an approximation of the generator.
     """
-    N = len(evecs)
-    if normalize:
-        evec_norm = np.linalg.norm(evecs,axis=0)
-        evecs*= np.sqrt(N)/evec_norm
-    du = evecs[delay:] - evecs[:-1*delay]
-    du /= dt_eff * delay
-    A = np.dot(np.transpose(evecs[:-1*delay]),du)/(1.*N-delay)
-    return A
 
-def get_reverse_generator(evecs,delay=1,dt_eff=1.,normalize=False):
+    N = len(basis)
+    # Get Starting indices and stopping
+    t_0_indices, t_lag_indices = dm.start_stop_indices(traj_edges,delay)
+    M = len(t_0_indices)
+    du = 1.*(basis_t_lag - basis_t_0)/(dt_eff * delay)
+    L = np.dot(np.transpose(basis_t_0),du)/M
+    return L
+
+def get_beta(fxn_vals,basis,traj_edges,delay=1):
     """
-    Constructs an approximation of the generator.
+
     """
-    N = len(evecs)
-    if normalize:
-        evec_norm = np.linalg.norm(evecs,axis=0)
-        evecs*= np.sqrt(N)/evec_norm
-    du =  evecs[:-1*delay] - evecs[delay:]
-    du /= dt_eff * delay
-    A = np.dot(np.transpose(evecs[:-1*delay]),du)/(N-delay)
+    N = len(basis)
+    t_0_indices, t_lag_indices = dm.start_stop_indices(traj_edges,delay)
+    basis_t_0 = basis[t_0_indices]
+    fxn_vals_t_0 = fxn_vals[t_0_indices]
+    np.dot(fxn_vals_t_0,basis_t_0)/M
 
-def get_beta(evecs,f,delay=1):
-    N = len(f)
-    beta = np.dot(f[:-1*delay],evecs[:-1*delay])/(N-delay)
-    return beta
 
-def get_committor_dense(evecs,state_A,state_B,complement=None,dt_eff=1.,normalize=False):
-    # Normalize eigenvectors appropriately.
-    evecs = np.array(evecs).astype('float')
-    N = len(evecs)
-    if normalize:
-        evec_norm = np.linalg.norm(evecs,axis=0)
-        evecs*= np.sqrt(N)/evec_norm
-    if complement is None:
-        complement = 1-state_A-state_B # Set of data points not in A or B.
+def get_ht(basis,stateA,traj_edges,delay=1,dt_eff=1.,on_tol=1E-4,normalize=True):
+    """
+    Calculates the hitting time using a galerkin method.
+    """
+    # Check if any of the basis functions are nonzero on target state.
+    A_locs = np.where(stateA == 0)[0]
 
-    # Get Propagating Term, E[u_j 1_(AUC)^c L u_i]
-    du = np.diff(evecs,axis=0)/dt_eff
-    u_dot_ind = np.transpose(evecs[:-1]) * complement[:-1]
-    L_prop = np.dot(u_dot_ind,du)/(N-1)
+    if np.any(basis[A_locs] != 0.):
+        raise RuntimeWarning("Some of the basis vectors are nonzero in state A.ss")
 
-    # Get boundary terms
-    L_A = np.dot(np.transpose(evecs)*state_A,evecs)/N
-    L_B = np.dot(np.transpose(evecs)*state_B,evecs)/N
-    mod_Gen = L_prop+L_A+L_B
+    L = get_generator(basis,traj_edges,delay=delay,dt_eff,td_eff,on_tol=on_tol,normalize=normalize)
+    beta = get_beta(stateA,basis,traj_edges,delay=delay,)
+    coeffs = spl.solve(L,beta)
+    ht = np.dot(basis,coeffs)
+    return ht
 
-    b =  np.dot(np.transpose(evecs),state_B)/N
-    try:
-        x = spl.solve(mod_Gen,b)
-    except:
-        print mod_Gen
-        print L_A
-        print L_B
-        raise
-    g = np.dot(evecs,x)
-    return g
-    
-def get_ht(evecs,state_A,dt_eff=1.,normalize=False):
-    # Normalize eigenvectors appropriately.
-    evecs = np.array(evecs).astype('float')
-    N = len(evecs)
-    if normalize:
-        evec_norm = np.linalg.norm(evecs,axis=0)
-        evecs*= np.sqrt(N)/evec_norm
-    complement = 1-state_A # Set of data points not in A or B.
 
-    # Get Propagating Term, E[u_j 1_(AUC)^c L u_i]
-    du = np.diff(evecs,axis=0)/dt_eff
-    u_dot_ind = np.transpose(evecs[:-1]) * complement[:-1]
-    L_prop = np.dot(u_dot_ind,du)/(N-1)
+def clean_basis(basis,traj_edges,delay,on_tol=1E-4,backwards=False):
+    # Normalize the eigenvectors
+    t_0_indices, t_lag_indices = dm.start_stop_indices(traj_edges,delay)
+    evec_norm = np.linalg.norm(basis,axis=0)
+    basis *= np.sqrt(N)/evec_norm
+    return
 
-    # Get boundary terms
-    L_A = np.dot(np.transpose(evecs)*state_A,evecs)/N
-    mod_Gen = L_prop+L_A
+    # basis_t_0 = basis[t_0_indices]
+    # basis_t_lag = basis[t_lag_indices]
+    #
+    # # Check if orthonormal according to start_basis.
+    # M = len(basis_t_0)
+    # on_chck = np.dot(basis_t_0.T,basis_t_0)/M
+    # np.fill_diagonal(on_chck,0)
+    # if (np.abs(on_chck)>on_tol).any():
+    #     raise RuntimeWarning('The dot product of the basis vectors restricted to the initial points does not pass the orthogonality test.')
+    #
+    # return basis
+    #
 
-    b =  np.dot(np.transpose(evecs),(state_A-1))/N
-    try:
-        np.save('L_prop',L_prop)
-        np.save('L_A',L_A)
-        x = spl.solve(mod_Gen,b)
-    except:
-        print mod_Gen
-        print b
-        raise
-    tau = np.dot(evecs,x)
-    return tau,x
-    
-    
-def get_tau(data,epsilon,nevecs,alpha=None,beta=None,weights=None,D=1,period=None,nneighb=200,normalize=False):
-    dm_evals, evecs = get_Dmap_evecs(data,epsilon,nevecs,weights=weights,D=D,alpha=alpha,beta=beta,period=period,nneighb=nneighb)
-    if normalize:
-        evec_norm = np.linalg.norm(evecs,axis=0)
-        evecs*= np.sqrt(N)/evec_norm
+# def get_reverse_generator(evecs,delay=1,dt_eff=1.,normalize=False):
+#     """
+#     Constructs an approximation of the generator.
+#     """
+#     N = len(basis)
+#     # Get Starting indices and stopping
+#     t_0_indices, t_lag_indices = dm.start_stop_indices(traj_edges,delay)
+#     # Normalize the eigenvectors
+#     if normalize:
+#         evec_norm = np.linalg.norm(basis,axis=0)
+#         basis *= np.sqrt(N)/evec_norm
+#     basis_t_0 = basis[t_0_indices]
+#     basis_t_lag = basis[t_lag_indices]
+#
+#     # Check if orthonormal according to start_basis.
+#     M = len(basis_t_0)
+#     on_chck = np.dot(basis_t_0.T,basis_t_0)/M
+#     np.fill_diagonal(on_chck,0)
+#
+#     if (np.abs(on_chck)>on_tol).any():
+#         raise RuntimeWarning('The dot product of the basis vectors restricted to the initial points does not pass the orthogonality test.')
+#
+#     du = 1.*(basis_t_lag - basis_t_0)/(dt_eff * delay)
+#     A = np.dot(np.transpose(basis_t_0),du)/(M)
+#     return beta
 
-    nevecs = len(evecs[0])
-    A = get_generator(evecs,dt_eff)
-    beta = get_beta(evecs,f)
-    Ainv = LA.groupInverse(A)
-    gksoln = np.dot(LA.groupInverse(A),beta)
-    top = np.dot(evecs,gksoln)
-    fntop = np.dot(f,top)
-    tau = -2.*fntop/np.dot(f,f)
-    return tau
-    
+# def get_committor_dense(evecs,state_A,state_B,complement=None,dt_eff=1.,normalize=False):
+#     # Normalize eigenvectors appropriately.
+#     evecs = np.array(evecs).astype('float')
+#     N = len(evecs)
+#     if normalize:
+#         evec_norm = np.linalg.norm(evecs,axis=0)
+#         evecs*= np.sqrt(N)/evec_norm
+#     if complement is None:
+#         complement = 1-state_A-state_B # Set of data points not in A or B.
+#
+#     # Get Propagating Term, E[u_j 1_(AUC)^c L u_i]
+#     du = np.diff(evecs,axis=0)/dt_eff
+#     u_dot_ind = np.transpose(evecs[:-1]) * complement[:-1]
+#     L_prop = np.dot(u_dot_ind,du)/(N-1)
+#
+#     # Get boundary terms
+#     L_A = np.dot(np.transpose(evecs)*state_A,evecs)/N
+#     L_B = np.dot(np.transpose(evecs)*state_B,evecs)/N
+#     mod_Gen = L_prop+L_A+L_B
+#
+#     b =  np.dot(np.transpose(evecs),state_B)/N
+#     try:
+#         x = spl.solve(mod_Gen,b)
+#     except:
+#         print mod_Gen
+#         print L_A
+#         print L_B
+#         raise
+#     g = np.dot(evecs,x)
+#     return g
+
+# def get_ht(evecs,state_A,dt_eff=1.,normalize=False):
+#     # Normalize eigenvectors appropriately.
+#     evecs = np.array(evecs).astype('float')
+#     N = len(evecs)
+#     if normalize:
+#         evec_norm = np.linalg.norm(evecs,axis=0)
+#         evecs*= np.sqrt(N)/evec_norm
+#     complement = 1-state_A # Set of data points not in A or B.
+#
+#     # Get Propagating Term, E[u_j 1_(AUC)^c L u_i]
+#     du = np.diff(evecs,axis=0)/dt_eff
+#     u_dot_ind = np.transpose(evecs[:-1]) * complement[:-1]
+#     L_prop = np.dot(u_dot_ind,du)/(N-1)
+#
+#     # Get boundary terms
+#     L_A = np.dot(np.transpose(evecs)*state_A,evecs)/N
+#     mod_Gen = L_prop+L_A
+#
+#     b =  np.dot(np.transpose(evecs),(state_A-1))/N
+#     try:
+#         np.save('L_prop',L_prop)
+#         np.save('L_A',L_A)
+#         x = spl.solve(mod_Gen,b)
+#     except:
+#         print mod_Gen
+#         print b
+#         raise
+#     tau = np.dot(evecs,x)
+#     return tau,x
+
+#
+# def get_tau(data,epsilon,nevecs,alpha=None,beta=None,weights=None,D=1,period=None,nneighb=200,normalize=False):
+#     dm_evals, evecs = get_Dmap_evecs(data,epsilon,nevecs,weights=weights,D=D,alpha=alpha,beta=beta,period=period,nneighb=nneighb)
+#     if normalize:
+#         evec_norm = np.linalg.norm(evecs,axis=0)
+#         evecs*= np.sqrt(N)/evec_norm
+#
+#     nevecs = len(evecs[0])
+#     A = get_generator(evecs,dt_eff)
+#     beta = get_beta(evecs,f)
+#     Ainv = LA.groupInverse(A)
+#     gksoln = np.dot(LA.groupInverse(A),beta)
+#     top = np.dot(evecs,gksoln)
+#     fntop = np.dot(f,top)
+#     tau = -2.*fntop/np.dot(f,f)
+#     return tau
+
 if __name__=='__main__':
     main()
