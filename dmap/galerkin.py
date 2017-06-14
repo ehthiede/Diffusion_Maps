@@ -5,8 +5,6 @@ Routines for performing Galerkin expansions of the data.
 """
 
 import numpy as np
-from scipy.sparse.linalg import eigsh
-import scipy.sparse as sps
 import scipy.linalg as spl
 import linalg as LA
 import data_manipulation as dm
