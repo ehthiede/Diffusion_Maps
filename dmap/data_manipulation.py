@@ -61,7 +61,7 @@ def flat2tlist(traj_2d,traj_edges):
 
 def start_stop_indices(traj_edges,delay):
     """
-
+    Returns the indices of all the initial and final points of the trajectory over the lag time.
     """
     ntraj = len(traj_edges)-1
     t_0_indices = []
@@ -74,3 +74,18 @@ def start_stop_indices(traj_edges,delay):
             t_0_indices += range(t_start,t_stop-delay)
             t_lag_indices += range(t_start+delay,t_stop)
     return t_0_indices, t_lag_indices
+
+def clean_basis(basis,traj_edges,delay,orthogonalize=True):
+    # Normalize the eigenvectors
+    N,k = np.shape(basis)
+    t_0_indices, t_lag_indices = dm.start_stop_indices(traj_edges,delay)
+    evec_norm = np.linalg.norm(basis,axis=0)
+    basis *= np.sqrt(N)/evec_norm
+
+    # Calculate orthogonal coefficients
+    if orthogonalize:
+        basis_t_0 = basis[t_0_indices]
+        Q,R = spl.qr(basis_t_0)
+        R_sub = R[:k,:k]
+    basis = np.dot(basis,R_sub)
+    return basis 

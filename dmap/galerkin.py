@@ -24,6 +24,19 @@ def get_generator(basis,traj_edges,delay=1,dt_eff=1.):
     L = np.dot(np.transpose(basis_t_0),du)/M
     return L
 
+def get_transop(basis,traj_edges,delay=1,dt_eff=1.):
+    """
+    Constructs an approximation of the generator.
+    """
+    N = len(basis)
+    # Get Starting indices and stopping
+    t_0_indices, t_lag_indices = dm.start_stop_indices(traj_edges,delay)
+    M = len(t_0_indices)
+    basis_t_lag = basis[t_lag_indices]
+    basis_t_0 = basis[t_0_indices]
+    T = np.dot(np.transpose(basis_t_0),basis_t_lag)/M
+    return T
+
 def get_beta(fxn_vals,basis,traj_edges,delay=1):
     """
 
@@ -81,60 +94,6 @@ def get_committor(basis,g_guess,stateA,traj_edges,delay=1,expand_guess=False):
     delta_g = np.dot(basis,coeffs)
     return g_guess + delta_g
 
-def clean_basis(basis,traj_edges,delay,orthogonalize=True):
-    # Normalize the eigenvectors
-    N,k = np.shape(basis)
-    t_0_indices, t_lag_indices = dm.start_stop_indices(traj_edges,delay)
-    evec_norm = np.linalg.norm(basis,axis=0)
-    basis *= np.sqrt(N)/evec_norm
-
-    # Calculate orthogonal coefficients
-    if orthogonalize:
-        basis_t_0 = basis[t_0_indices]
-        Q,R = spl.qr(basis_t_0)
-        R_sub = R[:k,:k]
-    basis = np.dot(basis,R_sub)
-    return basis 
-
-    # basis_t_0 = basis[t_0_indices]
-    # basis_t_lag = basis[t_lag_indices]
-    #
-    # # Check if orthonormal according to start_basis.
-    # M = len(basis_t_0)
-    # on_chck = np.dot(basis_t_0.T,basis_t_0)/M
-    # np.fill_diagonal(on_chck,0)
-    # if (np.abs(on_chck)>on_tol).any():
-    #     raise RuntimeWarning('The dot product of the basis vectors restricted to the initial points does not pass the orthogonality test.')
-    #
-    # return basis
-    #
-
-# def get_reverse_generator(evecs,delay=1,dt_eff=1.,normalize=False):
-#     """
-#     Constructs an approximation of the generator.
-#     """
-#     N = len(basis)
-#     # Get Starting indices and stopping
-#     t_0_indices, t_lag_indices = dm.start_stop_indices(traj_edges,delay)
-#     # Normalize the eigenvectors
-#     if normalize:
-#         evec_norm = np.linalg.norm(basis,axis=0)
-#         basis *= np.sqrt(N)/evec_norm
-#     basis_t_0 = basis[t_0_indices]
-#     basis_t_lag = basis[t_lag_indices]
-#
-#     # Check if orthonormal according to start_basis.
-#     M = len(basis_t_0)
-#     on_chck = np.dot(basis_t_0.T,basis_t_0)/M
-#     np.fill_diagonal(on_chck,0)
-#
-#     if (np.abs(on_chck)>on_tol).any():
-#         raise RuntimeWarning('The dot product of the basis vectors restricted to the initial points does not pass the orthogonality test.')
-#
-#     du = 1.*(basis_t_lag - basis_t_0)/(dt_eff * delay)
-#     A = np.dot(np.transpose(basis_t_0),du)/(M)
-#     return beta
-
 # def get_committor_dense(evecs,state_A,state_B,complement=None,dt_eff=1.,normalize=False):
 #     # Normalize eigenvectors appropriately.
 #     evecs = np.array(evecs).astype('float')
@@ -166,37 +125,6 @@ def clean_basis(basis,traj_edges,delay,orthogonalize=True):
 #     g = np.dot(evecs,x)
 #     return g
 
-# def get_ht(evecs,state_A,dt_eff=1.,normalize=False):
-#     # Normalize eigenvectors appropriately.
-#     evecs = np.array(evecs).astype('float')
-#     N = len(evecs)
-#     if normalize:
-#         evec_norm = np.linalg.norm(evecs,axis=0)
-#         evecs*= np.sqrt(N)/evec_norm
-#     complement = 1-state_A # Set of data points not in A or B.
-#
-#     # Get Propagating Term, E[u_j 1_(AUC)^c L u_i]
-#     du = np.diff(evecs,axis=0)/dt_eff
-#     u_dot_ind = np.transpose(evecs[:-1]) * complement[:-1]
-#     L_prop = np.dot(u_dot_ind,du)/(N-1)
-#
-#     # Get boundary terms
-#     L_A = np.dot(np.transpose(evecs)*state_A,evecs)/N
-#     mod_Gen = L_prop+L_A
-#
-#     b =  np.dot(np.transpose(evecs),(state_A-1))/N
-#     try:
-#         np.save('L_prop',L_prop)
-#         np.save('L_A',L_A)
-#         x = spl.solve(mod_Gen,b)
-#     except:
-#         print mod_Gen
-#         print b
-#         raise
-#     tau = np.dot(evecs,x)
-#     return tau,x
-
-#
 # def get_tau(data,epsilon,nevecs,alpha=None,beta=None,weights=None,D=1,period=None,nneighb=200,normalize=False):
 #     dm_evals, evecs = get_Dmap_evecs(data,epsilon,nevecs,weights=weights,D=D,alpha=alpha,beta=beta,period=period,nneighb=nneighb)
 #     if normalize:
