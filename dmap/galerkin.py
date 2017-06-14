@@ -43,21 +43,56 @@ def get_ht(basis,stateA,traj_edges,delay=1,dt_eff=1.,on_tol=1E-4,normalize=True)
     A_locs = np.where(stateA == 0)[0]
 
     if np.any(basis[A_locs] != 0.):
-        raise RuntimeWarning("Some of the basis vectors are nonzero in state A.ss")
+        raise RuntimeWarning("Some of the basis vectors are nonzero in state A.")
 
-    L = get_generator(basis,traj_edges,delay=delay,dt_eff,td_eff,on_tol=on_tol,normalize=normalize)
-    beta = get_beta(stateA,basis,traj_edges,delay=delay,)
+    L = get_generator(basis,traj_edges,delay=delay,dt_eff=dt_eff)
+    beta = get_beta(stateA,basis,traj_edges,delay=delay)
     coeffs = spl.solve(L,beta)
     ht = np.dot(basis,coeffs)
     return ht
 
+def get_committor(basis,g_guess,stateA,traj_edges,delay=1,expand_guess=False):
+    """
+    Calculates the committor for hitting B using a galerkin method.
+    """
+    # Check if any of the basis functions are nonzero on target state.
+    N = len(basis) # Number of datapoints
+    A_locs = np.where(stateA == 0)[0]
+    B_locs = np.where(stateB == 0)[B]
+
+    if np.any(basis[A_locs] != 0.):
+        raise RuntimeWarning("Some of the basis vectors are nonzero in state A.")
+    if np.any(basis[B_locs] != 0.):
+        raise RuntimeWarning("Some of the basis vectors are nonzero in state B.")
+
+
+    L = get_generator(basis,traj_edges,delay=delay,dt_eff=1,on_tol=on_tol,normalize=normalize)
+    if expand_guess:
+        guess_coeffs = get_beta(g_guess,basis,traj_edges,delay=delay)
+        L_guess = np.dot(L,guess_coeffs)
+    else:
+        g_diff_full = np.zeros(N)
+        g_diff = (g_guess[delay:]-g_guess[:-delay])/delay
+        g_diff_full[:delay] = g_diff
+        L_guess = get_beta(g_diff,basis,traj_edges,delay=delay)
+
+    coeffs = spl.solve(L,-L_guess)
+    delta_g = np.dot(basis,coeffs)
+    return g_guess + delta_g
 
 def clean_basis(basis,traj_edges,delay,on_tol=1E-4,backwards=False):
     # Normalize the eigenvectors
+    N,k = np.shape(basis)
     t_0_indices, t_lag_indices = dm.start_stop_indices(traj_edges,delay)
     evec_norm = np.linalg.norm(basis,axis=0)
     basis *= np.sqrt(N)/evec_norm
-    return
+
+    # Calculate orthogonal coefficients
+    basis_t_0 = basis[t_0_indices]
+    Q,R = spl.qr(basis_t_0)
+    R_sub = R[:k,:k]
+    basis_orthogonalized = np.dot(basis,R_sub)
+    return basis_orthogonalized
 
     # basis_t_0 = basis[t_0_indices]
     # basis_t_lag = basis[t_lag_indices]
@@ -175,6 +210,3 @@ def clean_basis(basis,traj_edges,delay,on_tol=1E-4,backwards=False):
 #     fntop = np.dot(f,top)
 #     tau = -2.*fntop/np.dot(f,f)
 #     return tau
-
-if __name__=='__main__':
-    main()
