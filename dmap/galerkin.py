@@ -47,7 +47,7 @@ def get_ht(basis,stateA,traj_edges,delay=1,dt_eff=1.,on_tol=1E-4,normalize=True)
     beta = get_beta(stateA,basis,traj_edges,delay=delay)
     coeffs = spl.solve(L,beta)
     ht = np.dot(basis,coeffs)
-    return ht
+    return ht,coefs
 
 def get_committor(basis,g_guess,stateA,traj_edges,delay=1,expand_guess=False):
     """
@@ -78,7 +78,7 @@ def get_committor(basis,g_guess,stateA,traj_edges,delay=1,expand_guess=False):
     delta_g = np.dot(basis,coeffs)
     return g_guess + delta_g
 
-def clean_basis(basis,traj_edges,delay,on_tol=1E-4,backwards=False):
+def clean_basis(basis,traj_edges,delay,orthogonalize=True):
     # Normalize the eigenvectors
     N,k = np.shape(basis)
     t_0_indices, t_lag_indices = dm.start_stop_indices(traj_edges,delay)
@@ -86,11 +86,12 @@ def clean_basis(basis,traj_edges,delay,on_tol=1E-4,backwards=False):
     basis *= np.sqrt(N)/evec_norm
 
     # Calculate orthogonal coefficients
-    basis_t_0 = basis[t_0_indices]
-    Q,R = spl.qr(basis_t_0)
-    R_sub = R[:k,:k]
-    basis_orthogonalized = np.dot(basis,R_sub)
-    return basis_orthogonalized
+    if orthogonalize:
+        basis_t_0 = basis[t_0_indices]
+        Q,R = spl.qr(basis_t_0)
+        R_sub = R[:k,:k]
+    basis = np.dot(basis,R_sub)
+    return basis 
 
     # basis_t_0 = basis[t_0_indices]
     # basis_t_lag = basis[t_lag_indices]
