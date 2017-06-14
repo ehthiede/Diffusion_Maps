@@ -18,6 +18,8 @@ def get_generator(basis,traj_edges,delay=1,dt_eff=1.):
     # Get Starting indices and stopping
     t_0_indices, t_lag_indices = dm.start_stop_indices(traj_edges,delay)
     M = len(t_0_indices)
+    basis_t_lag = basis[t_lag_indices]
+    basis_t_0 = basis[t_0_indices]
     du = 1.*(basis_t_lag - basis_t_0)/(dt_eff * delay)
     L = np.dot(np.transpose(basis_t_0),du)/M
     return L
@@ -28,9 +30,10 @@ def get_beta(fxn_vals,basis,traj_edges,delay=1):
     """
     N = len(basis)
     t_0_indices, t_lag_indices = dm.start_stop_indices(traj_edges,delay)
+    M = len(t_0_indices)
     basis_t_0 = basis[t_0_indices]
     fxn_vals_t_0 = fxn_vals[t_0_indices]
-    np.dot(fxn_vals_t_0,basis_t_0)/M
+    return np.dot(fxn_vals_t_0,basis_t_0)/M
 
 
 def get_ht(basis,stateA,traj_edges,delay=1,dt_eff=1.,on_tol=1E-4,normalize=True):
@@ -38,16 +41,16 @@ def get_ht(basis,stateA,traj_edges,delay=1,dt_eff=1.,on_tol=1E-4,normalize=True)
     Calculates the hitting time using a galerkin method.
     """
     # Check if any of the basis functions are nonzero on target state.
-    A_locs = np.where(stateA == 0)[0]
+    A_locs = np.where(stateA)[0]
 
-    if np.any(basis[A_locs] != 0.):
+    if np.any(basis[A_locs]):
         raise RuntimeWarning("Some of the basis vectors are nonzero in state A.")
 
     L = get_generator(basis,traj_edges,delay=delay,dt_eff=dt_eff)
-    beta = get_beta(stateA,basis,traj_edges,delay=delay)
+    beta = get_beta(stateA-1.,basis,traj_edges,delay=delay)
     coeffs = spl.solve(L,beta)
     ht = np.dot(basis,coeffs)
-    return ht,coefs
+    return ht,coeffs
 
 def get_committor(basis,g_guess,stateA,traj_edges,delay=1,expand_guess=False):
     """
