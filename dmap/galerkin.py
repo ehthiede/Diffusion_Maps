@@ -71,16 +71,15 @@ def get_committor(basis,g_guess,stateA,traj_edges,delay=1,expand_guess=False):
     """
     # Check if any of the basis functions are nonzero on target state.
     N = len(basis) # Number of datapoints
-    A_locs = np.where(stateA == 0)[0]
-    B_locs = np.where(stateB == 0)[B]
-
-    if np.any(basis[A_locs] != 0.):
+    A_locs = np.where(stateA)[0]
+    B_locs = np.where(stateB)[0]
+    if np.any(basis[A_locs]):
         raise RuntimeWarning("Some of the basis vectors are nonzero in state A.")
-    if np.any(basis[B_locs] != 0.):
+    if np.any(basis[B_locs]):
         raise RuntimeWarning("Some of the basis vectors are nonzero in state B.")
 
 
-    L = get_generator(basis,traj_edges,delay=delay,dt_eff=1,on_tol=on_tol,normalize=normalize)
+    L = get_generator(basis,traj_edges,delay=delay,dt_eff=1,normalize=normalize)
     if expand_guess:
         guess_coeffs = get_beta(g_guess,basis,traj_edges,delay=delay)
         L_guess = np.dot(L,guess_coeffs)
@@ -89,10 +88,19 @@ def get_committor(basis,g_guess,stateA,traj_edges,delay=1,expand_guess=False):
         g_diff = (g_guess[delay:]-g_guess[:-delay])/delay
         g_diff_full[:delay] = g_diff
         L_guess = get_beta(g_diff,basis,traj_edges,delay=delay)
-
     coeffs = spl.solve(L,-L_guess)
     delta_g = np.dot(basis,coeffs)
     return g_guess + delta_g
+
+def get_stationary_distrib(basis,traj_edges,delay=1,dt_eff=1):
+    """
+
+    """
+    L = get_generator(basis,traj_edges,delay=delay,dt_eff=1,normalize=normalize)
+    evals, evecs = spl.eig(L,left=True,right=False)
+    stat_dist = evecs[:,-1] ; stat_eval = evals[-1]
+    print 'state_evals'
+    return stat_dist
 
 # def get_committor_dense(evecs,state_A,state_B,complement=None,dt_eff=1.,normalize=False):
 #     # Normalize eigenvectors appropriately.

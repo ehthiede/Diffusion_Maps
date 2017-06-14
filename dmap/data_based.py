@@ -57,6 +57,7 @@ def get_stationary_distrib(L):
 
     """
     evals, evecs = spl.eig(L,left=True,right=False)
+    evals, evecs = LA._sort_esystem(evals,evecs)
     stat = evecs[:,0]
     l1 = evals[0]
     if np.abs(l1) > _stat_eval_tol:
