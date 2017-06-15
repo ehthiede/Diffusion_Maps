@@ -49,7 +49,7 @@ def get_beta(fxn_vals,basis,traj_edges,delay=1):
     return np.dot(fxn_vals_t_0,basis_t_0)/M
 
 
-def get_ht(basis,stateA,traj_edges,delay=1,dt_eff=1.,on_tol=1E-4,normalize=True):
+def get_ht(basis,stateA,traj_edges,delay=1,dt_eff=1.):
     """
     Calculates the hitting time using a galerkin method.
     """
@@ -79,7 +79,7 @@ def get_committor(basis,g_guess,stateA,traj_edges,delay=1,expand_guess=False):
         raise RuntimeWarning("Some of the basis vectors are nonzero in state B.")
 
 
-    L = get_generator(basis,traj_edges,delay=delay,dt_eff=1,normalize=normalize)
+    L = get_generator(basis,traj_edges,delay=delay,dt_eff=1)
     if expand_guess:
         guess_coeffs = get_beta(g_guess,basis,traj_edges,delay=delay)
         L_guess = np.dot(L,guess_coeffs)
@@ -96,11 +96,11 @@ def get_stationary_distrib(basis,traj_edges,delay=1,dt_eff=1):
     """
 
     """
-    L = get_generator(basis,traj_edges,delay=delay,dt_eff=1,normalize=normalize)
+    L = get_generator(basis,traj_edges,delay=delay,dt_eff=1)
     evals, evecs = spl.eig(L,left=True,right=False)
     stat_dist = evecs[:,-1] ; stat_eval = evals[-1]
-    print 'state_evals'
-    return stat_dist
+    print 'state_evals', evals[:3]
+    return np.dot(basis,stat_dist)
 
 # def get_committor_dense(evecs,state_A,state_B,complement=None,dt_eff=1.,normalize=False):
 #     # Normalize eigenvectors appropriately.

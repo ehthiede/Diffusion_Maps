@@ -1,5 +1,5 @@
 import numpy as np
-
+import scipy.linalg as spl
 
 def tlist2flat(trajs):
     """Flattens a list of two dimensional trajectories into a single two dimensional datastructure, and returns it along with a list of tuples giving the locations of each trajectory.
@@ -69,7 +69,7 @@ def start_stop_indices(traj_edges,delay):
     for i in xrange(ntraj):
         t_start = traj_edges[i]
         t_stop = traj_edges[i+1]
-        print t_start, t_stop
+        # print t_start, t_stop
         if t_stop - t_start > delay:
             t_0_indices += range(t_start,t_stop-delay)
             t_lag_indices += range(t_start+delay,t_stop)
@@ -78,7 +78,7 @@ def start_stop_indices(traj_edges,delay):
 def clean_basis(basis,traj_edges,delay,orthogonalize=True):
     # Normalize the eigenvectors
     N,k = np.shape(basis)
-    t_0_indices, t_lag_indices = dm.start_stop_indices(traj_edges,delay)
+    t_0_indices, t_lag_indices = start_stop_indices(traj_edges,delay)
     evec_norm = np.linalg.norm(basis,axis=0)
     basis *= np.sqrt(N)/evec_norm
 
@@ -88,4 +88,4 @@ def clean_basis(basis,traj_edges,delay,orthogonalize=True):
         Q,R = spl.qr(basis_t_0)
         R_sub = R[:k,:k]
     basis = np.dot(basis,R_sub)
-    return basis 
+    return basis
