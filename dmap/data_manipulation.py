@@ -89,3 +89,21 @@ def clean_basis(basis,traj_edges,delay,orthogonalize=True):
         R_sub = R[:k,:k]
     basis = np.dot(basis,R_sub)
     return basis
+
+def delay_embed(data,traj_edges,nembed=1):
+    N,d = np.shape(data)
+    new_traj_list = []
+    ntraj = len(traj_edges)-1
+    for i in xrange(ntraj):
+        start = traj_edges[i] ; stop = traj_edges[i+1]
+        traj = data[start:stop]
+        N_i = len(traj)
+        if N_i > nembed+1: # Check if trajectory is long enough to embed
+            new_traj = np.empty((len(traj)-nembed,(nembed+1)*d))
+            for n in xrange(nembed+1):
+                dtraj = traj[nembed-n:N_i-n]
+                new_traj[:,n*d:(n+1)*d] = dtraj
+            new_traj_list.append(new_traj)
+    new_t2d,new_edges = tlist2flat(new_traj_list)
+    return new_t2d, new_edges
+        
