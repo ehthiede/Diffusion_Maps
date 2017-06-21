@@ -24,7 +24,7 @@ def get_generator(basis,traj_edges,delay=1,dt_eff=1.):
     L = np.dot(np.transpose(basis_t_0),du)/M
     return L
 
-def get_transop(basis,traj_edges,delay=1,dt_eff=1.):
+def get_transop(basis,traj_edges,delay=1):
     """
     Constructs an approximation of the generator.
     """
@@ -98,8 +98,9 @@ def get_stationary_distrib(basis,traj_edges,delay=1,dt_eff=1):
     """
     L = get_generator(basis,traj_edges,delay=delay,dt_eff=1)
     evals, evecs = spl.eig(L,left=True,right=False)
-    stat_dist = evecs[:,-1] ; stat_eval = evals[-1]
-    print 'state_evals', evals[:3]
+    evals,evecs = LA._sort_esystem(evals,evecs)
+    stat_dist = evecs[:,0] ; stat_eval = evals[0]
+    print 'state_evals', evals[:3], evals[-1]
     return np.dot(basis,stat_dist)
 
 # def get_committor_dense(evecs,state_A,state_B,complement=None,dt_eff=1.,normalize=False):

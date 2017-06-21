@@ -193,7 +193,6 @@ def get_bandwidth_fxn(data,period=None,nneighb=None,epses=2.**np.arange(-40,41),
         return np.ones(N),None  # Handle uniform bandwidth case.
     else:
         # Use q^beta as bandwidth, where q is an estimate of the density.
-        print epses, 'epses', d, 'd', beta, 'beta'
         q,d_est,eps_opt = kde.kde(data,epses=epses,period=period,nneighb=nneighb,d=d)
         if d is None:
             d = d_est
