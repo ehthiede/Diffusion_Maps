@@ -69,7 +69,6 @@ def start_stop_indices(traj_edges,delay):
     for i in xrange(ntraj):
         t_start = traj_edges[i]
         t_stop = traj_edges[i+1]
-        # print t_start, t_stop
         if t_stop - t_start > delay:
             t_0_indices += range(t_start,t_stop-delay)
             t_lag_indices += range(t_start+delay,t_stop)
@@ -87,7 +86,7 @@ def clean_basis(basis,traj_edges,delay,orthogonalize=True):
         basis_t_0 = basis[t_0_indices]
         Q,R = spl.qr(basis_t_0)
         R_sub = R[:k,:k]
-    basis = np.dot(basis,R_sub)
+        basis = np.dot(basis,R_sub)
     return basis
 
 def delay_embed(data,traj_edges,nembed=1):
@@ -106,4 +105,3 @@ def delay_embed(data,traj_edges,nembed=1):
             new_traj_list.append(new_traj)
     new_t2d,new_edges = tlist2flat(new_traj_list)
     return new_t2d, new_edges
-        
