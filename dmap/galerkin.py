@@ -6,7 +6,6 @@ Routines for performing Galerkin expansions of the data.
 
 import numpy as np
 import scipy.linalg as spl
-import linalg as LA
 import data_manipulation as dm
 
 def get_generator(basis,traj_edges,delay=1,dt_eff=1.):
@@ -23,6 +22,16 @@ def get_generator(basis,traj_edges,delay=1,dt_eff=1.):
     du = 1.*(basis_t_lag - basis_t_0)/(dt_eff * delay)
     L = np.dot(np.transpose(basis_t_0),du)/M
     return L
+
+def get_stiffness_mat(basis,traj_edges,delay=1.):
+    N = len(basis)
+    # Get Starting indices and stopping
+    t_0_indices, t_lag_indices = dm.start_stop_indices(traj_edges,delay)
+    basis_t_0 = basis[t_0_indices]
+
+    M = len(t_0_indices)
+    S = np.dot(np.transpose(basis_t_0),basis_t_0)/M
+    return S
 
 def get_transop(basis,traj_edges,delay=1):
     """
@@ -65,12 +74,13 @@ def get_ht(basis,stateA,traj_edges,delay=1,dt_eff=1.):
     ht = np.dot(basis,coeffs)
     return ht,coeffs
 
-def get_committor(basis,g_guess,stateA,traj_edges,delay=1,expand_guess=False):
+def get_committor(basis,g_guess,stateA,stateB,traj_edges,delay=1,expand_guess=False):
     """
     Calculates the committor for hitting B using a galerkin method.
     """
     # Check if any of the basis functions are nonzero on target state.
     N = len(basis) # Number of datapoints
+    print 'N', N
     A_locs = np.where(stateA)[0]
     B_locs = np.where(stateB)[0]
     if np.any(basis[A_locs]):
@@ -86,66 +96,29 @@ def get_committor(basis,g_guess,stateA,traj_edges,delay=1,expand_guess=False):
     else:
         g_diff_full = np.zeros(N)
         g_diff = (g_guess[delay:]-g_guess[:-delay])/delay
-        g_diff_full[:delay] = g_diff
+        print np.shape(g_diff_full), np.shape(g_diff)
+        g_diff_full[:-delay] = g_diff
         L_guess = get_beta(g_diff,basis,traj_edges,delay=delay)
     coeffs = spl.solve(L,-L_guess)
     delta_g = np.dot(basis,coeffs)
     return g_guess + delta_g
 
-def get_stationary_distrib(basis,traj_edges,delay=1,dt_eff=1):
+def get_esystem(basis,traj_edges,delay=1):
     """
 
     """
+    # Calculate Generator, Stiffness matrix
     L = get_generator(basis,traj_edges,delay=delay,dt_eff=1)
-    evals, evecs = spl.eig(L,left=True,right=False)
-    evals,evecs = LA._sort_esystem(evals,evecs)
-    stat_dist = evecs[:,0] ; stat_eval = evals[0]
-    print 'state_evals', evals[:3], evals[-1]
-    return np.dot(basis,stat_dist)
+    S = get_stiffness_mat(basis,traj_edges,delay=delay)
+    print np.shape(L), np.shape(S)
+    # Calculate, sort eigensystem
+    evals, evecs_l, evecs_r = spl.eig(L,b=S,left=True,right=True)
+    idx = evals.argsort()[::-1]
+    evals = evals[idx]
+    evecs_l = evecs_l[:,idx]
+    evecs_r = evecs_r[:,idx]
+    # Expand eigenvectors into real space.
+    expanded_evecs_l = np.dot(basis,evecs_l)
+    expanded_evecs_r = np.dot(basis,evecs_r)
+    return evals, expanded_evecs_l, expanded_evecs_r
 
-# def get_committor_dense(evecs,state_A,state_B,complement=None,dt_eff=1.,normalize=False):
-#     # Normalize eigenvectors appropriately.
-#     evecs = np.array(evecs).astype('float')
-#     N = len(evecs)
-#     if normalize:
-#         evec_norm = np.linalg.norm(evecs,axis=0)
-#         evecs*= np.sqrt(N)/evec_norm
-#     if complement is None:
-#         complement = 1-state_A-state_B # Set of data points not in A or B.
-#
-#     # Get Propagating Term, E[u_j 1_(AUC)^c L u_i]
-#     du = np.diff(evecs,axis=0)/dt_eff
-#     u_dot_ind = np.transpose(evecs[:-1]) * complement[:-1]
-#     L_prop = np.dot(u_dot_ind,du)/(N-1)
-#
-#     # Get boundary terms
-#     L_A = np.dot(np.transpose(evecs)*state_A,evecs)/N
-#     L_B = np.dot(np.transpose(evecs)*state_B,evecs)/N
-#     mod_Gen = L_prop+L_A+L_B
-#
-#     b =  np.dot(np.transpose(evecs),state_B)/N
-#     try:
-#         x = spl.solve(mod_Gen,b)
-#     except:
-#         print mod_Gen
-#         print L_A
-#         print L_B
-#         raise
-#     g = np.dot(evecs,x)
-#     return g
-
-# def get_tau(data,epsilon,nevecs,alpha=None,beta=None,weights=None,D=1,period=None,nneighb=200,normalize=False):
-#     dm_evals, evecs = get_Dmap_evecs(data,epsilon,nevecs,weights=weights,D=D,alpha=alpha,beta=beta,period=period,nneighb=nneighb)
-#     if normalize:
-#         evec_norm = np.linalg.norm(evecs,axis=0)
-#         evecs*= np.sqrt(N)/evec_norm
-#
-#     nevecs = len(evecs[0])
-#     A = get_generator(evecs,dt_eff)
-#     beta = get_beta(evecs,f)
-#     Ainv = LA.groupInverse(A)
-#     gksoln = np.dot(LA.groupInverse(A),beta)
-#     top = np.dot(evecs,gksoln)
-#     fntop = np.dot(f,top)
-#     tau = -2.*fntop/np.dot(f,f)
-#     return tau

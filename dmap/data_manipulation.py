@@ -74,12 +74,7 @@ def start_stop_indices(traj_edges,delay):
             t_lag_indices += range(t_start+delay,t_stop)
     return t_0_indices, t_lag_indices
 
-def clean_basis(basis,traj_edges,delay,orthogonalize=True):
-    # Normalize the eigenvectors
-    N,k = np.shape(basis)
-    t_0_indices, t_lag_indices = start_stop_indices(traj_edges,delay)
-    evec_norm = np.linalg.norm(basis,axis=0)
-    basis *= np.sqrt(N)/evec_norm
+def clean_basis(basis,traj_edges,delay=1,orthogonalize=False,make_positive=False):
 
     # Calculate orthogonal coefficients
     if orthogonalize:
@@ -87,9 +82,29 @@ def clean_basis(basis,traj_edges,delay,orthogonalize=True):
         Q,R = spl.qr(basis_t_0)
         R_sub = R[:k,:k]
         basis = np.dot(basis,R_sub)
+
+    # Split into positive, negative components.
+    if make_positive:
+        print basis
+        print "-------------"
+        basis_shape = np.shape(basis)
+        pos_basis = basis*(basis>0)
+        neg_basis = basis*(basis<=0)
+        print pos_basis, neg_basis
+        new_basis = np.zeros((basis_shape[0],basis_shape[1]*2))
+        new_basis[:,::2] = pos_basis
+        new_basis[:,1::2] = -1*neg_basis
+        basis = new_basis[:,np.any(new_basis,axis=0)]
+        print basis
+
+    # Normalize the eigenvectors
+    N,k = np.shape(basis)
+    t_0_indices, t_lag_indices = start_stop_indices(traj_edges,delay)
+    evec_norm = np.linalg.norm(basis,axis=0)
+    basis *= np.sqrt(N)/evec_norm
     return basis
 
-def delay_embed(data,traj_edges,nembed=1):
+def delay_embed(data,traj_edges,nembed=1,difference=False):
     N,d = np.shape(data)
     new_traj_list = []
     ntraj = len(traj_edges)-1
@@ -102,6 +117,9 @@ def delay_embed(data,traj_edges,nembed=1):
             for n in xrange(nembed+1):
                 dtraj = traj[nembed-n:N_i-n]
                 new_traj[:,n*d:(n+1)*d] = dtraj
+            if difference == True:
+                traj_diff = -1*np.diff(new_traj,axis=1) 
+                new_traj[:,d:] = traj_diff
             new_traj_list.append(new_traj)
     new_t2d,new_edges = tlist2flat(new_traj_list)
     return new_t2d, new_edges

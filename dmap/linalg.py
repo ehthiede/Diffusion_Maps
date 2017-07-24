@@ -54,7 +54,7 @@ def stationary_distrib(F,residtol = 1.E-10,max_iter=100):
 
     return z/np.sum(z) # Return normalized (by convention)
    
-def _sort_esystem(evals,evecs):
+def _sort_esystem(evals,evecs,return_indices=False):
     """
     Sorts an eigenvector system in order of descending eigenvalue.
 
@@ -64,18 +64,25 @@ def _sort_esystem(evals,evecs):
         1D structure containing the eigenvalues.  Must be sortable.
     evecs : 2D array-like
         Data structure containing the eigenvectors.  Column i the eigenvector corresponding to evals[i].
+    return_index : bool, optional
+        If true, return the indices that sort the eigenvalues
 
     Returns
     -------
     evals : 1D array-like
         Sorted eigenvalues.
     evals : 1D array-like
-        Sorted eigenvetors.
+        Sorted eigenvectors.
+    idx : 1D array-like of ints
+        Indices that sort the eigenvalues.
     """
     idx = evals.argsort()[::-1]
     evals = evals[idx]
     evecs = evecs[:,idx]
-    return evals, evecs
+    if return_indices:
+        return evals, evecs, idx
+    else:
+        return evals, evecs
 
 
 def _submatrix(F,i):
