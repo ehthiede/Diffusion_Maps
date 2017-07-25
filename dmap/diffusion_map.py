@@ -122,10 +122,11 @@ def diffusion_map(data,rho=None,period=None,nneighb=None,D=1.0,weights=None,d=No
                     d = d_kde
             q /= (rho**d)
     alpha = _eval_param(alpha,d)
-    diagq = sps.dia_matrix((1./(q**alpha),[0]),shape=(N,N))
-    K = diagq * K 
-    K = K * diagq
-    if verbosity >= 2 : print r"Applied q**\alpha normalization."
+    if alpha != 0:
+        diagq = sps.dia_matrix((1./(q**alpha),[0]),shape=(N,N))
+        K = diagq * K 
+        K = K * diagq
+        if verbosity >= 2 : print r"Applied q**\alpha normalization."
 
     # Apply importance sampling weights if provided.
     if weights is not None:
