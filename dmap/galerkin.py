@@ -23,12 +23,11 @@ def get_generator(basis,traj_edges,delay=1,dt_eff=1.):
     L = np.dot(np.transpose(basis_t_0),du)/M
     return L
 
-def get_stiffness_mat(basis,traj_edges,delay=1.):
+def get_stiffness_mat(basis,traj_edges,delay=1):
     N = len(basis)
     # Get Starting indices and stopping
     t_0_indices, t_lag_indices = dm.start_stop_indices(traj_edges,delay)
     basis_t_0 = basis[t_0_indices]
-
     M = len(t_0_indices)
     S = np.dot(np.transpose(basis_t_0),basis_t_0)/M
     return S

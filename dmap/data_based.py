@@ -14,19 +14,18 @@ import galerkin as gkn
 
 _stat_eval_tol = 10**-5
 
-def get_data_model(basis,traj_edges,delay=1,dt_eff=1,clean_basis=True):
+def get_data_model(basis,traj_edges,delay=1,dt_eff=1):
     """
 
     """
     # Orthogonalize basis vectors appropriately
     N,k = np.shape(basis)
-    if clean_basis:
-        bbasis = clean_basis(basis,traj_edges,delay=delay,orthogonalize=True)
     T_op = gkn.get_transop(basis,traj_edges,delay=delay)
-    L = np.dot(np.dot(basis,T_op),basis.T)
-    L -= np.eye(N)
-    L /= dt_eff*delay
-    return L
+    S = gkn.get_stiffness_mat(basis,traj_edges,delay=delay)
+    Sinv = spl.inv(S)
+    T_scaled = np.dot(Sinv,np.dot(T_op,Sinv)) # Correct for nonorthogonality
+    T_sum = np.sum(T_real,axis=1); print np.min(T_sum), np.max(T_sum)
+    return T_real
 
 def get_ht(L,stateA):
     """
