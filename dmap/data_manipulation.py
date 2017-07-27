@@ -117,6 +117,7 @@ def delay_embed(data,traj_edges,nembed=1,difference=False):
                 new_traj[:,n*d:(n+1)*d] = dtraj
             if difference == True:
                 traj_diff = -1*np.diff(new_traj,axis=1) 
+                print traj_diff.shape, new_traj.shape, d
                 new_traj[:,d:] = traj_diff
             new_traj_list.append(new_traj)
     new_t2d,new_edges = tlist2flat(new_traj_list)

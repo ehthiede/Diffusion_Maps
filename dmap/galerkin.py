@@ -75,7 +75,7 @@ def get_ht(basis,stateA,traj_edges,test_set=None,delay=1,dt_eff=1.):
         raise RuntimeWarning("Some of the basis vectors are nonzero in state A.")
 
     L = get_generator(basis,traj_edges,test_set=test_set,delay=delay,dt_eff=dt_eff)
-    beta = get_beta(stateA-1.,basis,traj_edges,test_set=test_set,delay=delay)
+    beta = get_beta(stateA-1.,test_set,traj_edges,delay=delay)
     coeffs = spl.solve(L,beta)
     ht = np.dot(basis,coeffs)
     return ht,coeffs

@@ -24,6 +24,7 @@ def get_data_model(basis,traj_edges,delay=1,dt_eff=1):
     S = gkn.get_stiffness_mat(basis,traj_edges,delay=delay)
     Sinv = spl.inv(S)
     T_scaled = np.dot(Sinv,np.dot(T_op,Sinv)) # Correct for nonorthogonality
+    T_real = np.dot(basis,np.dot(T_scaled,basis.T))
     T_sum = np.sum(T_real,axis=1); print np.min(T_sum), np.max(T_sum)
     return T_real
 
