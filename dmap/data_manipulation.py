@@ -113,12 +113,15 @@ def delay_embed(data,traj_edges,nembed=1,difference=False):
         if N_i > nembed+1: # Check if trajectory is long enough to embed
             new_traj = np.empty((len(traj)-nembed,(nembed+1)*d))
             for n in xrange(nembed+1):
-                dtraj = traj[nembed-n:N_i-n]
-                new_traj[:,n*d:(n+1)*d] = dtraj
-            if difference == True:
-                traj_diff = -1*np.diff(new_traj,axis=1) 
-                print traj_diff.shape, new_traj.shape, d
-                new_traj[:,d:] = traj_diff
+                delay_traj = traj[nembed-n:N_i-n]
+                new_traj[:,n*d:(n+1)*d] = delay_traj
+            if difference:
+                current_traj = new_traj[:,:d]
+                for m in xrange(1,nembed+1):
+                    past_traj = new_traj[:,m*d:(m+1)*d]
+                    traj_diff = current_traj-past_traj
+                    current_traj = np.copy(past_traj)
+                    new_traj[:,m*d:(m+1)*d] = traj_diff
             new_traj_list.append(new_traj)
     new_t2d,new_edges = tlist2flat(new_traj_list)
     return new_t2d, new_edges
