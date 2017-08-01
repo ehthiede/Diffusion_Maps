@@ -111,6 +111,29 @@ def get_committor(basis,g_guess,stateA,stateB,traj_edges,test_set=None,delay=1,e
     delta_g = np.dot(basis,coeffs)
     return g_guess + delta_g
 
+def get_stationary_distrib(basis,traj_edges,test_set=None,delay=1,fix=0):
+    """
+
+    """
+    # Initialize params. 
+    N, k = np.shape(basis)
+    if test_set is None:
+        test_set = basis
+    # Calculate Generator, Stiffness matrix
+    L = get_generator(basis,traj_edges,test_set=test_set,delay=delay,dt_eff=1)
+    # Get stationary distribution
+    nfi = range(0,fix)+range(fix+1,len(L)) #not fixed indices.
+    b = -1*L[fix,nfi]
+    L_submat_transpose = (L[nfi,:][:,nfi]).T
+    rho_notfixed = spl.solve(L_submat_transpose,b)
+    pi = np.ones(k)
+    pi[nfi] = rho_notfixed
+    # Convert to values in realspace.
+    pi_realspace = np.dot(basis,pi)
+    pi_realspace *= np.sign(np.median(pi_realspace))
+    return pi_realspace
+
+
 
 def get_esystem(basis,traj_edges,test_set=None,delay=1):
     """
@@ -120,11 +143,13 @@ def get_esystem(basis,traj_edges,test_set=None,delay=1):
         test_set = basis
     # Calculate Generator, Stiffness matrix
     L = get_generator(basis,traj_edges,test_set=test_set,delay=delay,dt_eff=1)
+#    L = get_transop(basis,traj_edges,test_set=test_set,delay=delay)
     S = get_stiffness_mat(basis,traj_edges,test_set=test_set,delay=delay)
     # Calculate, sort eigensystem
-    evals, evecs_l, evecs_r = spl.eig(L,b=S,left=True,right=True)
+    evals, evecs_l, evecs_r = spl.eig(L,b=S,left=True,right=True,overwrite_a=False,overwrite_b=False)
     idx = evals.argsort()[::-1]
     evals = evals[idx]
+    print np.min(evals), evals[:10], 'eval loc check'
     evecs_l = evecs_l[:,idx]
     evecs_r = evecs_r[:,idx]
     # Expand eigenvectors into real space.

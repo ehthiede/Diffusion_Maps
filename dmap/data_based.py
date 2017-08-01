@@ -14,19 +14,25 @@ import galerkin as gkn
 
 _stat_eval_tol = 10**-5
 
-def get_data_model(basis,traj_edges,delay=1,dt_eff=1):
+def get_data_model(basis,traj_edges,delay=1,dt_eff=1,return_parts=False):
     """
 
     """
     # Orthogonalize basis vectors appropriately
+    basis = dm.clean_basis(basis,traj_edges)
     N,k = np.shape(basis)
+    t_0_indices, t_lag_indices = dm.start_stop_indices(traj_edges,delay)
+    M = len(t_0_indices)
+    reduced_basis = basis[t_0_indices]/np.sqrt(M)
     T_op = gkn.get_transop(basis,traj_edges,delay=delay)
     S = gkn.get_stiffness_mat(basis,traj_edges,delay=delay)
     Sinv = spl.inv(S)
     T_scaled = np.dot(Sinv,np.dot(T_op,Sinv)) # Correct for nonorthogonality
-    T_real = np.dot(basis,np.dot(T_scaled,basis.T))
-    T_sum = np.sum(T_real,axis=1); print np.min(T_sum), np.max(T_sum)
-    return T_real
+
+    if return_parts:
+        return reduced_basis, T_op, S
+    else:
+        return np.dot(reduced_basis,np.dot(T_scaled,reduced_basis.T))
 
 def get_ht(L,stateA):
     """
@@ -39,6 +45,7 @@ def get_ht(L,stateA):
     if isinstance(L_r,sps.spmatrix):
         tau_small = spsl.spsolve(L_r,-np.ones(len(d_locs)))
     else:
+        print np.max(L_r), np.min(L_r)
         tau_small = spl.solve(L_r,-np.ones(len(d_locs)))
     tau = np.zeros(stateA.shape,dtype='float')
     tau[d_locs] = tau_small
