@@ -74,10 +74,6 @@ def get_stationary_distrib(L):
     evals, evecs = LA._sort_esystem(evals,evecs)
     stat = evecs[:,0]
     l1 = evals[0]
-    print '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~'
-    print evals[:10], 'evals'
-    print np.min(evals), np.max(evals)
-    print '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~'
     if np.abs(l1) > _stat_eval_tol:
         raise RuntimeWarning('Eigenvalue corresponding to stationary distribution is %.4e, which has magnitude greater than the tolerance.'%l1)
     return stat

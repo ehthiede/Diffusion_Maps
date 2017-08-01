@@ -88,7 +88,6 @@ def get_committor(basis,g_guess,stateA,stateB,traj_edges,test_set=None,delay=1,e
         test_set = basis
     # Check if any of the basis functions are nonzero on target state.
     N = len(basis) # Number of datapoints
-    print 'N', N
     A_locs = np.where(stateA)[0]
     B_locs = np.where(stateB)[0]
     if np.any(basis[A_locs]):
@@ -104,7 +103,6 @@ def get_committor(basis,g_guess,stateA,stateB,traj_edges,test_set=None,delay=1,e
     else:
         g_diff_full = np.zeros(N)
         g_diff = (g_guess[delay:]-g_guess[:-delay])/delay
-        print np.shape(g_diff_full), np.shape(g_diff)
         g_diff_full[:-delay] = g_diff
         L_guess = get_beta(g_diff,test_set,traj_edges,delay=delay)
     coeffs = spl.solve(L,-L_guess)
@@ -149,7 +147,6 @@ def get_esystem(basis,traj_edges,test_set=None,delay=1):
     evals, evecs_l, evecs_r = spl.eig(L,b=S,left=True,right=True,overwrite_a=False,overwrite_b=False)
     idx = evals.argsort()[::-1]
     evals = evals[idx]
-    print np.min(evals), evals[:10], 'eval loc check'
     evecs_l = evecs_l[:,idx]
     evecs_r = evecs_r[:,idx]
     # Expand eigenvectors into real space.
