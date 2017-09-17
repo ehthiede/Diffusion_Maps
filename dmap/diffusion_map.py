@@ -11,7 +11,7 @@ import kde
 import numbers
 from _NumericStringParser import _NumericStringParser
 
-def diffusion_map(data,rho=None,period=None,nneighb=None,D=1.0,weights=None,d=None,alpha='0',beta='-1/(d+2)',epses=2.**np.arange(-40,41),rho_norm=True,return_full=False,verbosity=0):
+def diffusion_map(data,rho=None,period=None,nneighb=None,D=1.0,weights=None,d=None,alpha='0',beta='-1/(d+2)',epses=2.**np.arange(-40,41),rho_norm=True,return_full=False,symmetrize=True,verbosity=0):
     """Routine that creates a diffusion map.  A diffusion map is a transition rate matrix that accounts for the local structure of the data.
 
     Parameters
@@ -105,11 +105,12 @@ def diffusion_map(data,rho=None,period=None,nneighb=None,D=1.0,weights=None,d=No
     if verbosity >= 2 : print "Evaluated Kernel"
 
     # Symmetrize K using 'or' operator.
-    Ktrans = K.transpose()
-    dK = abs(K -Ktrans)
-    K = K + Ktrans
-    K = K + dK
-    K *= 0.5
+    if symmetrize:
+        Ktrans = K.transpose()
+        dK = abs(K -Ktrans)
+        K = K + Ktrans
+        K = K + dK
+        K *= 0.5
 
     # Apply q^alpha normalization.
     q = np.array(K.sum(axis=1)).flatten()

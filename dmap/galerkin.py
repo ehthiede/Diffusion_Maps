@@ -133,7 +133,7 @@ def get_stationary_distrib(basis,traj_edges,test_set=None,delay=1,fix=0):
 
 
 
-def get_esystem(basis,traj_edges,test_set=None,delay=1):
+def get_esystem(basis,traj_edges,test_set=None,delay=1,left=True,right=True):
     """
 
     """
@@ -144,13 +144,27 @@ def get_esystem(basis,traj_edges,test_set=None,delay=1):
 #    L = get_transop(basis,traj_edges,test_set=test_set,delay=delay)
     S = get_stiffness_mat(basis,traj_edges,test_set=test_set,delay=delay)
     # Calculate, sort eigensystem
-    evals, evecs_l, evecs_r = spl.eig(L,b=S,left=True,right=True,overwrite_a=False,overwrite_b=False)
-    idx = evals.argsort()[::-1]
-    evals = evals[idx]
-    evecs_l = evecs_l[:,idx]
-    evecs_r = evecs_r[:,idx]
-    # Expand eigenvectors into real space.
-    expanded_evecs_l = np.dot(test_set,evecs_l)
-    expanded_evecs_r = np.dot(basis,evecs_r)
-    return evals, expanded_evecs_l, expanded_evecs_r
+    if (left and right):
+        evals, evecs_l, evecs_r = spl.eig(L,b=S,left=True,right=True,overwrite_a=False,overwrite_b=False)
+        idx = evals.argsort()[::-1]
+        evals = evals[idx]
+        evecs_l = evecs_l[:,idx]
+        evecs_r = evecs_r[:,idx]
+        # Expand eigenvectors into real space.
+        expanded_evecs_l = np.dot(test_set,evecs_l)
+        expanded_evecs_r = np.dot(basis,evecs_r)
+        return evals, expanded_evecs_l, expanded_evecs_r
+    elif (left or right):
+        evals, evecs = spl.eig(L,b=S,left=left,right=right,overwrite_a=False,overwrite_b=False)
+        idx = evals.argsort()[::-1]
+        evals = evals[idx]
+        evecs = evecs[:,idx]
+        # Expand eigenvectors into real space.
+        expanded_evecs = np.dot(test_set,evecs)
+        return evals, expanded_evecs
+    else:
+        evals = spl.eig(L,b=S,left=left,right=right,overwrite_a=False,overwrite_b=False)
+        return np.sort(evals)
+        
+
 
